@@ -88,40 +88,9 @@ struct triangle
         os << "Triangle: " << t.p[0] << " " << t.p[1] << " " << t.p[2];
         return os;
     }
+
+    auto point_ids() const { return p; }
 };
-
-template<typename Mesh>
-size_t
-offset(const Mesh& msh, const typename Mesh::edge_type& edge)
-{
-	auto itor = std::lower_bound(msh.edges.begin(), msh.edges.end(), edge);
-	if (itor == msh.edges.end())
-		throw std::invalid_argument("edge not found");
-
-	return std::distance(msh.edges.begin(), itor);
-}
-
-template<typename T>
-std::array<edge, 3>
-edges(const simplicial_mesh<T>& msh, const simplicial_mesh<T>::cell_type& cell)
-{
-	std::array<edge, 3> ret;
-	ret[0] = msh.edges.at( offset(msh, edge(cell.p[0], cell.p[1])) );
-	ret[1] = msh.edges.at( offset(msh, edge(cell.p[1], cell.p[2])) );
-	ret[2] = msh.edges.at( offset(msh, edge(cell.p[0], cell.p[2])) );
-	return ret;
-}
-
-template<typename T>
-std::array<size_t, 3>
-edge_ids(const simplicial_mesh<T>& msh, const simplicial_mesh<T>::cell_type& cell)
-{
-	std::array<size_t, 3> ret;
-	ret[0] = offset(msh, edge(cell.p[0], cell.p[1]));
-	ret[1] = offset(msh, edge(cell.p[1], cell.p[2]));
-	ret[2] = offset(msh, edge(cell.p[0], cell.p[2]));
-	return ret;
-}
 
 template<typename T, typename CellT>
 class mesh
@@ -144,6 +113,43 @@ public:
 
 template<typename T>
 using simplicial_mesh = mesh<T, triangle>;
+
+
+template<typename Mesh>
+size_t
+offset(const Mesh& msh, const typename Mesh::edge_type& edge)
+{
+	auto itor = std::lower_bound(msh.edges.begin(), msh.edges.end(), edge);
+	if (itor == msh.edges.end())
+		throw std::invalid_argument("edge not found");
+
+	return std::distance(msh.edges.begin(), itor);
+}
+
+template<typename T>
+std::array<edge, 3>
+edges(const simplicial_mesh<T>& msh, const typename simplicial_mesh<T>::cell_type& cell)
+{
+	std::array<edge, 3> ret;
+	ret[0] = msh.edges.at( offset(msh, edge(cell.p[0], cell.p[1])) );
+	ret[1] = msh.edges.at( offset(msh, edge(cell.p[1], cell.p[2])) );
+	ret[2] = msh.edges.at( offset(msh, edge(cell.p[0], cell.p[2])) );
+	return ret;
+}
+
+template<typename T>
+std::array<size_t, 3>
+edge_ids(const simplicial_mesh<T>& msh, const typename simplicial_mesh<T>::cell_type& cell)
+{
+	std::array<size_t, 3> ret;
+	ret[0] = offset(msh, edge(cell.p[0], cell.p[1]));
+	ret[1] = offset(msh, edge(cell.p[1], cell.p[2]));
+	ret[2] = offset(msh, edge(cell.p[0], cell.p[2]));
+	return ret;
+}
+
+
+
 
 template<typename Mesh>
 class mesher;
@@ -249,8 +255,8 @@ public:
 	{
 		msh.points.push_back( point_type(0.0, 0.0) );
 		msh.points.push_back( point_type(1.0, 0.0) );
-		msh.points.push_back( point_type(0.0, 1.0) );
 		msh.points.push_back( point_type(1.0, 1.0) );
+		msh.points.push_back( point_type(0.0, 1.0) );
 		msh.points.push_back( point_type(0.5, 0.5) );
 
 		msh.edges.push_back( edge(0,1,0,true) );

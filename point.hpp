@@ -1,31 +1,8 @@
-/*
- *       /\        Matteo Cicuttin (C) 2016, 2017
- *      /__\       matteo.cicuttin@enpc.fr
- *     /_\/_\      École Nationale des Ponts et Chaussées - CERMICS
- *    /\    /\
- *   /__\  /__\    DISK++, a template library for DIscontinuous SKeletal
- *  /_\/_\/_\/_\   methods. http://github.com/wareHHOuse/diskpp
- *
- * This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- *
- * If you use this code or parts of it for scientific publications, you
- * are required to cite it as following:
- *
- * Implementation of Discontinuous Skeletal methods on arbitrary-dimensional,
- * polytopal meshes using generic programming.
- * M. Cicuttin, D. A. Di Pietro, A. Ern.
- * Journal of Computational and Applied Mathematics.
- * DOI: 10.1016/j.cam.2017.09.017
- */
 
 #pragma once
 
 #include <iostream>
 #include <array>
-#include <stdexcept>
-#include <initializer_list>
 
 template<typename T, size_t DIM>
 class point
@@ -108,57 +85,82 @@ public:
     typename std::enable_if<DIM == 3, U>::type&
     z() { return m_coords[2]; }
 
-    /*
-    auto to_vector() const
+    point&
+    operator+=(const point& other)
     {
-        static_vector<T, DIM> ret;
         for (size_t i = 0; i < DIM; i++)
-            ret(i) = m_coords[i];
-        return ret;
-    }
-    */
+            m_coords[i] += other.m_coords[i];
 
-    friend point operator+(const point& p1, const point& p2)
-    {
-        point ret;
-        for (size_t i = 0; i < DIM; i++)
-            ret.m_coords[i] = p1.m_coords[i] + p2.m_coords[i];
-        
-        return ret;
+        return *this;
     }
 
-    friend point operator-(const point& p1, const point& p2)
+    point
+    operator+(const point& other)
     {
-        point ret;
-        for (size_t i = 0; i < DIM; i++)
-            ret.m_coords[i] = p1.m_coords[i] - p2.m_coords[i];
-        
+        point ret = *this;
+        ret += other;
         return ret;
     }
 
-    friend point operator*(const point& p, T scalefactor)
+    point&
+    operator-=(const point& other)
     {
-        point ret;
         for (size_t i = 0; i < DIM; i++)
-            ret.m_coords[i] = p.m_coords[i] * scalefactor;
-        
+            m_coords[i] -= other.m_coords[i];
+
+        return *this;
+    }
+
+    point
+    operator-(const point& other)
+    {
+        point ret = *this;
+        ret -= other;
         return ret;
     }
 
-    friend point operator*(T scalefactor, const point& p)
+    point&
+    operator*=(const T& scalefactor)
+    {
+        for (size_t i = 0; i < DIM; i++)
+            m_coords[i] *= scalefactor;
+
+        return *this;
+    }
+
+    point
+    operator*(const T& scalefactor)
+    {
+        point ret = *this;
+        ret *= scalefactor;
+        return ret;
+    }
+
+    friend point
+    operator*(T scalefactor, const point& p)
     {
         return p * scalefactor;
     }
 
-    friend point operator/(const point& p, T scalefactor)
+    point
+    operator/=(const T& scalefactor)
     {
         point ret;
         for (size_t i = 0; i < DIM; i++)
-            ret.m_coords[i] = p.m_coords[i] / scalefactor;
+            m_coords[i] /= scalefactor;
         
         return ret;
     }
+
+    point
+    operator/(const T& scalefactor)
+    {
+        point ret = *this;
+        ret /= scalefactor;
+        return ret;
+    }
 };
+
 
 template<typename T>
 T
