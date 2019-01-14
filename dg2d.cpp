@@ -26,6 +26,7 @@
 #define WITH_SILO
 
 #include "mesh.hpp"
+#include "meshers.hpp"
 #include "dataio.hpp"
 
 
