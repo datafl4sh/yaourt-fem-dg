@@ -29,27 +29,33 @@
 #include "meshers.hpp"
 #include "dataio.hpp"
 
-
+#include "cfem.hpp"
 
 int main(int argc, char **argv)
 {
-	
-	using T = double;
 
-	dg2d::simplicial_mesh<T> mesh;
-	auto mesher = dg2d::get_mesher(mesh);
+    using T = double;
 
-	mesher.create_mesh(mesh, 4);
+    dg2d::simplicial_mesh<T> mesh;
+    auto mesher = dg2d::get_mesher(mesh);
+
+    mesher.create_mesh(mesh, 4);
 
 #ifdef WITH_SILO
-	dg2d::silo_database silo;
-	silo.create("test.silo");
+    dg2d::silo_database silo;
+    silo.create("test.silo");
 
-	silo.add_mesh(mesh, "test_mesh");
+    silo.add_mesh(mesh, "test_mesh");
 #endif /* WITH_SILO */
 
+    for(auto& cl : mesh.cells)
+    {
+        auto bar = barycenter(mesh, cl);
+        auto bf = dg2d::cfem::eval_basis(mesh, cl, bar);
+        auto bg = dg2d::cfem::eval_basis_grad(mesh, cl);
+    }
 
-	return 0;
+    return 0;
 }
 
 

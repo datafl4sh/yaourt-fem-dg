@@ -9,8 +9,8 @@ namespace priv {
 template<typename T>
 void sort_uniq(std::vector<T>& vec)
 {
-	std::sort(vec.begin(), vec.end());
-	vec.erase( std::unique(vec.begin(), vec.end()), vec.end() );
+    std::sort(vec.begin(), vec.end());
+    vec.erase( std::unique(vec.begin(), vec.end()), vec.end() );
 }
 
 } //namespace priv
@@ -72,7 +72,7 @@ struct triangle
     triangle() {}
 
     triangle(size_t ap0, size_t ap1, size_t ap2)
-    	: p{ap0, ap1, ap2}
+        : p{ap0, ap1, ap2}
     {
         std::sort(p.begin(), p.end());
     }
@@ -96,19 +96,19 @@ template<typename T, typename CellT>
 class mesh
 {
 public:
-	using coordinate_type 	= T;
-	using face_type 		= edge;
-	using cell_type			= CellT;
-	using point_type 		= point<T,2>;
+    using coordinate_type   = T;
+    using face_type         = edge;
+    using cell_type         = CellT;
+    using point_type        = point<T,2>;
 
-	std::vector<point_type>		points;
-	std::vector<face_type>		faces;
-	std::vector<cell_type>		cells;
+    std::vector<point_type>     points;
+    std::vector<face_type>      faces;
+    std::vector<cell_type>      cells;
 
-	std::vector<std::array<size_t,2>> edge_owners;
+    std::vector<std::array<size_t,2>> face_owners;
 
-	mesh()
-	{}
+    mesh()
+    {}
 };
 
 template<typename T>
@@ -119,11 +119,11 @@ template<typename Mesh>
 size_t
 offset(const Mesh& msh, const typename Mesh::face_type& fc)
 {
-	auto itor = std::lower_bound(msh.faces.begin(), msh.faces.end(), fc);
-	if (itor == msh.faces.end())
-		throw std::invalid_argument("Mesh face not found");
+    auto itor = std::lower_bound(msh.faces.begin(), msh.faces.end(), fc);
+    if (itor == msh.faces.end())
+        throw std::invalid_argument("Mesh face not found");
 
-	return std::distance(msh.faces.begin(), itor);
+    return std::distance(msh.faces.begin(), itor);
 }
 
 template<typename T>
@@ -132,11 +132,11 @@ faces(const simplicial_mesh<T>& msh, const typename simplicial_mesh<T>::cell_typ
 {
     using face_type = typename simplicial_mesh<T>::face_type;
 
-	std::array<face_type, 3> ret;
-	ret[0] = msh.faces.at( offset(msh, face_type(cell.p[0], cell.p[1])) );
-	ret[1] = msh.faces.at( offset(msh, face_type(cell.p[1], cell.p[2])) );
-	ret[2] = msh.faces.at( offset(msh, face_type(cell.p[0], cell.p[2])) );
-	return ret;
+    std::array<face_type, 3> ret;
+    ret[0] = msh.faces.at( offset(msh, face_type(cell.p[0], cell.p[1])) );
+    ret[1] = msh.faces.at( offset(msh, face_type(cell.p[1], cell.p[2])) );
+    ret[2] = msh.faces.at( offset(msh, face_type(cell.p[0], cell.p[2])) );
+    return ret;
 }
 
 template<typename T>
@@ -145,11 +145,39 @@ face_ids(const simplicial_mesh<T>& msh, const typename simplicial_mesh<T>::cell_
 {
     using face_type = typename simplicial_mesh<T>::face_type;
 
-	std::array<size_t, 3> ret;
-	ret[0] = offset(msh, face_type(cell.p[0], cell.p[1]));
-	ret[1] = offset(msh, face_type(cell.p[1], cell.p[2]));
-	ret[2] = offset(msh, face_type(cell.p[0], cell.p[2]));
-	return ret;
+    std::array<size_t, 3> ret;
+    ret[0] = offset(msh, face_type(cell.p[0], cell.p[1]));
+    ret[1] = offset(msh, face_type(cell.p[1], cell.p[2]));
+    ret[2] = offset(msh, face_type(cell.p[0], cell.p[2]));
+    return ret;
 }
+
+template<typename T>
+std::array<point<T,2>, 3>
+points(const simplicial_mesh<T>& msh,
+       const typename simplicial_mesh<T>::cell_type& cl)
+{
+    std::array<point<T,2>, 3> ret;
+    ret[0] = msh.points.at(cl.p[0]);
+    ret[1] = msh.points.at(cl.p[1]);
+    ret[2] = msh.points.at(cl.p[2]);
+    return ret;
+}
+
+template<typename T>
+typename simplicial_mesh<T>::point_type
+barycenter(const simplicial_mesh<T>& msh,
+           const typename simplicial_mesh<T>::cell_type& cl)
+{
+    auto pts = points(msh, cl);
+    return (pts[0] + pts[1] + pts[2]) / 3.0;
+}
+
+enum class boundary_condition {
+    NONE,
+    DIRICHLET,
+    NEUMANN,
+    ROBIN
+};
 
 } //namespace dg2d
