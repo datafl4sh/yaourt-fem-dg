@@ -51,6 +51,7 @@ eval_basis_grad(const simplicial_mesh<T>& msh,
     return ret;
 }
 
+#if 0
 enum class bc_mode
 {
     STRONG,
@@ -120,6 +121,6 @@ public:
         }
     }
 };
-
+#endif
 } //namespace cfem
 } //namespace dg2d
