@@ -22,9 +22,6 @@
 #include <vector>
 #include <list>
 #include <blaze/Math.h>
-
-#define WITH_SILO
-
 #include "mesh.hpp"
 #include "meshers.hpp"
 #include "dataio.hpp"
