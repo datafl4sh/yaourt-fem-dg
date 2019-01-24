@@ -64,6 +64,8 @@ struct edge
     size_t  p0, p1, pb;
     bool    is_boundary, is_broken;
     size_t  boundary_id;
+    
+    auto point_ids() const { return std::array<size_t,2>({p0, p1}); }
 };
 
 
@@ -110,6 +112,11 @@ public:
     mesh()
     {}
 };
+
+bool is_boundary(const edge& e)
+{
+    return e.is_boundary;
+}
 
 template<typename T>
 using simplicial_mesh = mesh<T, triangle>;
@@ -171,6 +178,17 @@ barycenter(const simplicial_mesh<T>& msh,
 {
     auto pts = points(msh, cl);
     return (pts[0] + pts[1] + pts[2]) / 3.0;
+}
+
+template<typename T>
+T
+measure(const simplicial_mesh<T>& msh,
+        const typename simplicial_mesh<T>::cell_type& cl)
+{
+    auto pts = points(msh, cl);
+    auto v1 = pts[1] - pts[0];
+    auto v2 = pts[2] - pts[0];
+    return std::abs( v1.x() * v2.y() - v1.y() * v2.x() )/2.0;
 }
 
 enum class boundary_condition {

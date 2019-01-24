@@ -45,12 +45,16 @@ int main(int argc, char **argv)
     silo.add_mesh(mesh, "test_mesh");
 #endif /* WITH_SILO */
 
+    auto assembler = dg2d::cfem::get_assembler(mesh, 1);
+
     for(auto& cl : mesh.cells)
     {
-        auto bar = barycenter(mesh, cl);
-        auto bf = dg2d::cfem::eval_basis(mesh, cl, bar);
-        auto bg = dg2d::cfem::eval_basis_grad(mesh, cl);
+        auto local_lhs = dg2d::cfem::stiffness_matrix(mesh, cl);
+        blaze::StaticVector<T,3> local_rhs;
+        assembler.assemble(mesh, cl, local_lhs, local_rhs); 
     }
+    
+    assembler.finalize();
 
     return 0;
 }

@@ -1,6 +1,9 @@
+#pragma once
 
+#include <blaze/Math.h>
+#include <cassert>
 #include "mesh.hpp"
-#include "blaze/Math.h"
+#include "blaze_sparse_init.hpp"
 
 
 namespace dg2d { namespace cfem {
@@ -51,7 +54,20 @@ eval_basis_grad(const simplicial_mesh<T>& msh,
     return ret;
 }
 
-#if 0
+template<typename T>
+blaze::StaticMatrix<T, 3, 3>
+stiffness_matrix(const simplicial_mesh<T>& msh,
+                 const typename simplicial_mesh<T>::cell_type& cl)
+{
+    blaze::StaticMatrix<T, 3, 3> ret;
+
+    auto meas = measure(msh, cl);
+    auto dphi = eval_basis_grad(msh, cl);
+    auto stiff = meas * dphi * trans(dphi);
+
+    return stiff;
+}
+
 enum class bc_mode
 {
     STRONG,
@@ -59,68 +75,101 @@ enum class bc_mode
     NITSCHE
 };
 
-template<typename T, typename Idx = int>
-class cmat_triplet
-{
-    Idx     i, j;
-    T       val;
-
-public:
-    cmat_triplet() : i(0), j(0), val(0)
-    {}
-
-    cmat_triplet(Idx p_i, Idx p_j, T p_val)
-        : i(p_i), j(p_j), val(p_val)
-    {}
-
-    bool operator<(const cmat_triplet& other) const {
-        return (i == other.i and j < other.j) or (i < other.i);
-    }
-
-    auto row() const { return i; }
-    auto col() const { return j; }
-    auto val() const { return val; }
-};
-
 template<typename Mesh>
 class assembler
 {
+    using T = typename Mesh::coordinate_type;
+    using triplet_type = blaze::triplet<T>;
     blaze::CompressedMatrix<T>      lhs;
     blaze::DynamicVector<T>         rhs;
 
-    std::vector<cmat_triplet>       triplets;
+    std::vector<triplet_type>       triplets;
     std::vector<bool>               dirichlet_nodes;
 
-    std::vector<int>                compress_map;
-    std::vector<int>                expand_map;
+    std::vector<size_t>             compress_map;
+    std::vector<size_t>             expand_map;
+    
+    size_t                          system_size;
 
 public:
     assembler()
     {}
 
-    assembler(const Mesh& msh, const BoundaryConditions& bc,
-              const bc_mode& bcmode)
+    assembler(const Mesh& msh/*, const BoundaryConditions& bc,
+              const bc_mode& bcmode*/)
     {
+        dirichlet_nodes.resize( msh.points.size() );
+        for (auto& f : msh.faces)
+        {
+            if ( is_boundary(f) )
+            {
+                auto pts = f.point_ids();
+                assert(pts.size() == 2);
+                dirichlet_nodes.at( pts[0] ) = true;
+                dirichlet_nodes.at( pts[1] ) = true;
+            }
+        }
+        
+        compress_map.resize( msh.points.size() );
+        size_t system_size = std::count_if(dirichlet_nodes.begin(),
+                                           dirichlet_nodes.end(), 
+                                           [](bool d) -> bool {return !d;});
+        expand_map.resize( system_size );
+        
+        auto nnum = 0;
+        for (size_t i = 0; i < msh.points.size(); i++)
+        {
+            if ( dirichlet_nodes.at(i) )
+                continue;
 
+            expand_map.at(nnum) = i;
+            compress_map.at(i) = nnum++;
+        }
+        
+        lhs.resize( system_size, system_size );
+        rhs.resize( system_size );
     }
 
     bool assemble(const Mesh& msh, const typename Mesh::cell_type& cl,
-                  const blaze::StaticMatrix<3,3>& local_rhs,
-                  const blaze::StaticVector<3>& local_lhs)
+                  const blaze::StaticMatrix<T,3,3>& local_rhs,
+                  const blaze::StaticVector<T,3>& local_lhs)
     {
         auto l2g = cl.point_ids();
-
+        assert(l2g.size() == 3);
+        
         for (size_t i = 0; i < 3; i++)
         {
+            if ( dirichlet_nodes.at( l2g[i] ) )
+                continue;
+            
             for (size_t j = 0; j < 3; j++)
             {
-                triplets.push_back( l2g(i), l2g(j), local_rhs(i,j) );
+                if ( dirichlet_nodes.at( l2g[j] ) )
+                    continue;
+                auto ci = compress_map.at(l2g[i]);
+                auto cj = compress_map.at(l2g[j]);
+                
+                triplets.push_back( {ci, cj, local_rhs(i,j)} );
             }
 
-            rhs[ l2g(i) ] = local_lhs[i];
+            rhs[ l2g[i] ] += local_lhs[i];
         }
+        
+        return true;
+    }
+    
+    void finalize()
+    {
+        blaze::init_from_triplets(lhs, triplets.begin(), triplets.end());
+        triplets.clear();
     }
 };
-#endif
+
+template<typename Mesh>
+auto get_assembler(const Mesh& msh, size_t degree)
+{
+    return assembler<Mesh>(msh);
+}
+
 } //namespace cfem
 } //namespace dg2d
