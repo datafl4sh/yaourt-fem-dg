@@ -80,8 +80,6 @@ class assembler
 {
     using T = typename Mesh::coordinate_type;
     using triplet_type = blaze::triplet<T>;
-    blaze::CompressedMatrix<T>      lhs;
-    blaze::DynamicVector<T>         rhs;
 
     std::vector<triplet_type>       triplets;
     std::vector<bool>               dirichlet_nodes;
@@ -89,9 +87,12 @@ class assembler
     std::vector<size_t>             compress_map;
     std::vector<size_t>             expand_map;
     
-    size_t                          system_size;
+    size_t                          sys_size;
 
 public:
+    blaze::CompressedMatrix<T>      lhs;
+    blaze::DynamicVector<T>         rhs;
+
     assembler()
     {}
 
@@ -111,10 +112,10 @@ public:
         }
         
         compress_map.resize( msh.points.size() );
-        size_t system_size = std::count_if(dirichlet_nodes.begin(),
-                                           dirichlet_nodes.end(), 
-                                           [](bool d) -> bool {return !d;});
-        expand_map.resize( system_size );
+        sys_size = std::count_if(dirichlet_nodes.begin(),
+                                 dirichlet_nodes.end(), 
+                                 [](bool d) -> bool {return !d;});
+        expand_map.resize( sys_size );
         
         auto nnum = 0;
         for (size_t i = 0; i < msh.points.size(); i++)
@@ -126,8 +127,8 @@ public:
             compress_map.at(i) = nnum++;
         }
         
-        lhs.resize( system_size, system_size );
-        rhs.resize( system_size );
+        lhs.resize( sys_size, sys_size );
+        rhs.resize( sys_size );
     }
 
     bool assemble(const Mesh& msh, const typename Mesh::cell_type& cl,
@@ -162,6 +163,17 @@ public:
     {
         blaze::init_from_triplets(lhs, triplets.begin(), triplets.end());
         triplets.clear();
+    }
+
+    size_t system_size() const { return sys_size; }
+
+    void expand(const blaze::DynamicVector<T>& sol,
+                blaze::DynamicVector<T>& expanded_sol)
+    {
+        expanded_sol.resize( compress_map.size() );
+        blaze::reset(expanded_sol);
+        for (size_t i = 0; i < sol.size(); i++)
+            expanded_sol[ expand_map.at(i) ] = sol[i];
     }
 };
 

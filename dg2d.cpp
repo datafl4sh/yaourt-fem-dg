@@ -25,7 +25,7 @@
 #include "mesh.hpp"
 #include "meshers.hpp"
 #include "dataio.hpp"
-
+#include "solvers.hpp"
 #include "cfem.hpp"
 
 int main(int argc, char **argv)
@@ -49,12 +49,32 @@ int main(int argc, char **argv)
 
     for(auto& cl : mesh.cells)
     {
-        auto local_lhs = dg2d::cfem::stiffness_matrix(mesh, cl);
+        auto pts = points(mesh, cl);
         blaze::StaticVector<T,3> local_rhs;
-        assembler.assemble(mesh, cl, local_lhs, local_rhs); 
+
+        local_rhs[0] = std::sin(M_PI*pts[0].x()) * std::sin(M_PI*pts[0].y());
+        local_rhs[1] = std::sin(M_PI*pts[1].x()) * std::sin(M_PI*pts[1].y());
+        local_rhs[2] = std::sin(M_PI*pts[2].x()) * std::sin(M_PI*pts[2].y());
+
+        auto local_lhs = dg2d::cfem::stiffness_matrix(mesh, cl);
+        assembler.assemble(mesh, cl, local_lhs, local_rhs);
     }
-    
+
     assembler.finalize();
+
+    blaze::DynamicVector<T> sol(assembler.system_size());
+
+    conjugated_gradient_params<T> cgp;
+    cgp.verbose = true;
+    conjugated_gradient(cgp, assembler.lhs, assembler.rhs, sol);
+
+    blaze::DynamicVector<T> exp_sol;
+
+    assembler.expand(sol, exp_sol);
+
+#ifdef WITH_SILO
+    silo.add_nodal_variable("test_mesh", "solution", exp_sol);
+#endif
 
     return 0;
 }
