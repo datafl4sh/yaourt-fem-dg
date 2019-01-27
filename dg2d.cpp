@@ -22,11 +22,12 @@
 #include <vector>
 #include <list>
 #include <blaze/Math.h>
-#include "mesh.hpp"
-#include "meshers.hpp"
-#include "dataio.hpp"
-#include "solvers.hpp"
-#include "cfem.hpp"
+
+#include "core/mesh.hpp"
+#include "core/meshers.hpp"
+#include "core/dataio.hpp"
+#include "core/solvers.hpp"
+#include "method_cfem/cfem.hpp"
 
 int main(int argc, char **argv)
 {
@@ -36,7 +37,7 @@ int main(int argc, char **argv)
     dg2d::simplicial_mesh<T> mesh;
     auto mesher = dg2d::get_mesher(mesh);
 
-    mesher.create_mesh(mesh, 4);
+    mesher.create_mesh(mesh, 6);
 
 #ifdef WITH_SILO
     dg2d::silo_database silo;
@@ -52,9 +53,13 @@ int main(int argc, char **argv)
         auto pts = points(mesh, cl);
         blaze::StaticVector<T,3> local_rhs;
 
-        local_rhs[0] = std::sin(M_PI*pts[0].x()) * std::sin(M_PI*pts[0].y());
-        local_rhs[1] = std::sin(M_PI*pts[1].x()) * std::sin(M_PI*pts[1].y());
-        local_rhs[2] = std::sin(M_PI*pts[2].x()) * std::sin(M_PI*pts[2].y());
+        auto bar = barycenter(mesh, cl);
+        auto meas = measure(mesh, cl);
+        T bval = 2.0 * M_PI * M_PI * meas * std::sin(M_PI*bar.x()) * std::sin(M_PI*bar.y()) / 3.0;
+
+        local_rhs[0] = bval;
+        local_rhs[1] = bval;
+        local_rhs[2] = bval;
 
         auto local_lhs = dg2d::cfem::stiffness_matrix(mesh, cl);
         assembler.assemble(mesh, cl, local_lhs, local_rhs);
@@ -66,6 +71,8 @@ int main(int argc, char **argv)
 
     conjugated_gradient_params<T> cgp;
     cgp.verbose = true;
+    cgp.max_iter = 2*assembler.system_size();
+
     conjugated_gradient(cgp, assembler.lhs, assembler.rhs, sol);
 
     blaze::DynamicVector<T> exp_sol;

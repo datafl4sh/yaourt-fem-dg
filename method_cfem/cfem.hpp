@@ -2,8 +2,8 @@
 
 #include <blaze/Math.h>
 #include <cassert>
-#include "mesh.hpp"
-#include "blaze_sparse_init.hpp"
+#include "../core/mesh.hpp"
+#include "../core/blaze_sparse_init.hpp"
 
 
 namespace dg2d { namespace cfem {
@@ -153,7 +153,7 @@ public:
                 triplets.push_back( {ci, cj, local_rhs(i,j)} );
             }
 
-            rhs[ l2g[i] ] += local_lhs[i];
+            rhs[ compress_map.at(l2g[i]) ] += local_lhs[i];
         }
         
         return true;
