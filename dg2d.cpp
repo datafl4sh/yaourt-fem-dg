@@ -29,40 +29,43 @@
 #include "core/solvers.hpp"
 #include "method_cfem/cfem.hpp"
 
+template<typename T>
+blaze::StaticVector<T, 3>
+compute_rhs(const dg2d::simplicial_mesh<T>& msh,
+            const typename dg2d::simplicial_mesh<T>::cell_type& cl)
+{
+    auto pts = points(msh, cl);
+    blaze::StaticVector<T,3> local_rhs;
+
+    auto bar = barycenter(msh, cl);
+    auto meas = measure(msh, cl);
+    T bval = std::sin(M_PI*bar.x()) * std::sin(M_PI*bar.y());
+    bval = bval * 2.0 * M_PI * M_PI * meas / 3.0;
+
+    local_rhs[0] = bval;
+    local_rhs[1] = bval;
+    local_rhs[2] = bval;
+
+    return local_rhs;
+}
+
 int main(int argc, char **argv)
 {
 
     using T = double;
 
-    dg2d::simplicial_mesh<T> mesh;
-    auto mesher = dg2d::get_mesher(mesh);
+    dg2d::simplicial_mesh<T> msh;
+    auto mesher = dg2d::get_mesher(msh);
 
-    mesher.create_mesh(mesh, 6);
+    mesher.create_mesh(msh, 6);
 
-#ifdef WITH_SILO
-    dg2d::silo_database silo;
-    silo.create("test.silo");
+    auto assembler = dg2d::cfem::get_assembler(msh, 1);
 
-    silo.add_mesh(mesh, "test_mesh");
-#endif /* WITH_SILO */
-
-    auto assembler = dg2d::cfem::get_assembler(mesh, 1);
-
-    for(auto& cl : mesh.cells)
+    for(auto& cl : msh.cells)
     {
-        auto pts = points(mesh, cl);
-        blaze::StaticVector<T,3> local_rhs;
-
-        auto bar = barycenter(mesh, cl);
-        auto meas = measure(mesh, cl);
-        T bval = 2.0 * M_PI * M_PI * meas * std::sin(M_PI*bar.x()) * std::sin(M_PI*bar.y()) / 3.0;
-
-        local_rhs[0] = bval;
-        local_rhs[1] = bval;
-        local_rhs[2] = bval;
-
-        auto local_lhs = dg2d::cfem::stiffness_matrix(mesh, cl);
-        assembler.assemble(mesh, cl, local_lhs, local_rhs);
+        auto local_lhs = dg2d::cfem::stiffness_matrix(msh, cl);
+        auto local_rhs = compute_rhs(msh, cl);
+        assembler.assemble(msh, cl, local_lhs, local_rhs);
     }
 
     assembler.finalize();
@@ -80,6 +83,11 @@ int main(int argc, char **argv)
     assembler.expand(sol, exp_sol);
 
 #ifdef WITH_SILO
+    dg2d::silo_database silo;
+    silo.create("test.silo");
+
+    silo.add_mesh(msh, "test_mesh");
+
     silo.add_nodal_variable("test_mesh", "solution", exp_sol);
 #endif
 
