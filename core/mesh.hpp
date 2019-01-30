@@ -1,5 +1,9 @@
 #pragma once
 
+#include <vector>
+#include <algorithm>
+#include <cassert>
+
 #include "point.hpp"
 
 namespace dg2d {

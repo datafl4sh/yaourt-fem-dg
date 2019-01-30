@@ -28,6 +28,8 @@ include_directories("${PROJECT_SOURCE_DIR}")
 include_directories(blaze)
 add_subdirectory(blaze)
 
+add_subdirectory(tests)
+
 add_executable(dg2d dg2d.cpp)
 target_link_libraries(dg2d ${LINK_LIBS})
 

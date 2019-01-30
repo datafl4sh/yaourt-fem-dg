@@ -109,7 +109,7 @@ public:
 	{}
 
 	void
-	create_mesh(mesh_type& msh, size_t refinement_iterations)
+	create_mesh(mesh_type& msh, size_t refinement_iterations = 0)
 	{
 		msh.points.push_back( point_type(0.0, 0.0) );
 		msh.points.push_back( point_type(1.0, 0.0) );
