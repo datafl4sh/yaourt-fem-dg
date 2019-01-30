@@ -42,47 +42,51 @@ class mesher<simplicial_mesh<T>>
         auto faces_end = msh.faces.end();
         for (size_t i = 0; i < triangles_to_process; i++)
         {
-            /* remove the original triangle */
             triangle t = msh.cells[i];
+            auto pts = t.point_ids();
+
+            auto p0 = pts[0];
+            auto p1 = pts[1];
+            auto p2 = pts[2];
 
             /* find the faces of the triangle */
-            auto t_e0 = *std::lower_bound(msh.faces.begin(), faces_end, face_type(t.p[0], t.p[1]));
+            auto t_e0 = *std::lower_bound(msh.faces.begin(), faces_end, face_type(p0, p1));
             assert(t_e0.is_broken);
 
-            auto t_e1 = *std::lower_bound(msh.faces.begin(), faces_end, face_type(t.p[1], t.p[2]));
+            auto t_e1 = *std::lower_bound(msh.faces.begin(), faces_end, face_type(p1, p2));
             assert(t_e1.is_broken);
 
-            auto t_e2 = *std::lower_bound(msh.faces.begin(), faces_end, face_type(t.p[0], t.p[2]));
+            auto t_e2 = *std::lower_bound(msh.faces.begin(), faces_end, face_type(p0, p2));
             assert(t_e2.is_broken);
 
-            assert(t_e0.p1 == t_e1.p0);
-            assert(t_e1.p1 == t_e2.p1);
-            assert(t_e0.p0 == t_e2.p0);
+            auto p0b = t_e0.pb;
+            auto p1b = t_e1.pb;
+            auto p2b = t_e2.pb;
 
             /* compute the faces of the new four triangles */
             /* first triangle */
-            msh.faces.push_back( face_type(t_e0.p0, t_e0.pb, t_e0.boundary_id, t_e0.is_boundary) );
-            msh.faces.push_back( face_type(t_e0.pb, t_e2.pb, false) );
-            msh.faces.push_back( face_type(t_e0.p0, t_e2.pb, t_e2.boundary_id, t_e2.is_boundary) );
-            triangle t0(t_e0.p0, t_e0.pb, t_e2.pb);
+            msh.faces.push_back( face_type(p0, p0b, t_e0.boundary_id, t_e0.is_boundary) );
+            msh.faces.push_back( face_type(p0b, p2b, false) );
+            msh.faces.push_back( face_type(p0, p2b, t_e2.boundary_id, t_e2.is_boundary) );
+            triangle t0(p0, p0b, p2b);
             new_cells.push_back(t0);
 
             /* second triangle */
-            msh.faces.push_back( face_type(t_e0.p1, t_e0.pb, t_e0.boundary_id, t_e0.is_boundary) );
-            msh.faces.push_back( face_type(t_e0.pb, t_e1.pb, false) );
-            msh.faces.push_back( face_type(t_e1.p0, t_e1.pb, t_e1.boundary_id, t_e1.is_boundary) );
-            triangle t1(t_e0.p1, t_e0.pb, t_e1.pb);
+            msh.faces.push_back( face_type(p0b, p1, t_e0.boundary_id, t_e0.is_boundary) );
+            msh.faces.push_back( face_type(p0b, p1b, false) );
+            msh.faces.push_back( face_type(p1, p1b, t_e1.boundary_id, t_e1.is_boundary) );
+            triangle t1(p0b, p1, p1b);
             new_cells.push_back(t1);
 
             /* third triangle */
-            msh.faces.push_back( face_type(t_e1.p1, t_e1.pb, t_e1.boundary_id, t_e1.is_boundary) );
-            msh.faces.push_back( face_type(t_e1.pb, t_e2.pb, false) );
-            msh.faces.push_back( face_type(t_e2.p1, t_e2.pb, t_e2.boundary_id, t_e2.is_boundary) );
-            triangle t2(t_e1.p1, t_e1.pb, t_e2.pb);
+            msh.faces.push_back( face_type(p1b, p2, t_e1.boundary_id, t_e1.is_boundary) );
+            msh.faces.push_back( face_type(p2b, p1b, false) );
+            msh.faces.push_back( face_type(p2, p2b, t_e2.boundary_id, t_e2.is_boundary) );
+            triangle t2(p1b, p2, p2b);
             new_cells.push_back(t2);
 
             /* fourth triangle */
-            triangle t3(t_e0.pb, t_e1.pb, t_e2.pb);
+            triangle t3(p0b, p1b, p2b);
             new_cells.push_back(t3);
         }
 
@@ -123,7 +127,7 @@ public:
 		msh.faces.push_back( face_type(3,4) );
 
 		msh.cells.push_back( triangle(0,1,4) );
-		msh.cells.push_back( triangle(0,3,4) );
+		msh.cells.push_back( triangle(0,4,3) );
 		msh.cells.push_back( triangle(1,2,4) );
 		msh.cells.push_back( triangle(2,3,4) );
 

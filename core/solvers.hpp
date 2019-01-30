@@ -29,11 +29,6 @@ conjugated_gradient(const conjugated_gradient_params<T>& cgp,
                     const blaze::DynamicVector<T>& b,
                     blaze::DynamicVector<T>& x)
 {
-    if ( cgp.verbose )
-    {
-        std::cout << A.rows() << " " << b.size() << " " << x.size() << std::endl;
-    }
-
     if ( A.rows() != A.columns() )
     {
         if (cgp.verbose)
@@ -78,7 +73,7 @@ conjugated_gradient(const conjugated_gradient_params<T>& cgp,
 
     while ( nr/nr0 > cgp.rr_tol && iter < cgp.max_iter && nr/nr0 < cgp.rr_max )
     {
-        if (cgp.verbose)
+        if (cgp.verbose )
         {
             std::cout << "                                                 \r";
             std::cout << " -> Iteration " << iter << ", rr = ";

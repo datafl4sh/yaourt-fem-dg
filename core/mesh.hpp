@@ -76,7 +76,7 @@ struct triangle
     triangle(size_t ap0, size_t ap1, size_t ap2)
         : p{ap0, ap1, ap2}
     {
-        std::sort(p.begin(), p.end());
+        //std::sort(p.begin(), p.end());
     }
 
     std::array<size_t, 3> p;
@@ -188,7 +188,7 @@ measure(const simplicial_mesh<T>& msh,
     auto pts = points(msh, cl);
     auto v1 = pts[1] - pts[0];
     auto v2 = pts[2] - pts[0];
-    return std::abs( v1.x() * v2.y() - v1.y() * v2.x() )/2.0;
+    return ( v1.x() * v2.y() - v1.y() * v2.x() )/2.0;
 }
 
 enum class boundary_condition {
