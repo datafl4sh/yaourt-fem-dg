@@ -12,7 +12,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- * 
+ *
  * Toy implememtation of Discontinuous Galerkin for teaching purposes
  *
  * Matteo Cicuttin (c) 2018
@@ -225,7 +225,7 @@ static double dunavant_rule_7[][4] = {
     { 0.260345966079040, 0.260345966079040, 0.479308067841920,  0.175615257433208 },
     { 0.869739794195568, 0.065130102902216, 0.065130102902216,  0.053347235608838 },
     { 0.065130102902216, 0.869739794195568, 0.065130102902216,  0.053347235608838 },
-    { 0.065130102902216, 0.065130102902216, 0.869739794195568,  0.053347235608838 },  
+    { 0.065130102902216, 0.065130102902216, 0.869739794195568,  0.053347235608838 },
     { 0.048690315425316, 0.312865496004874, 0.638444188569810,  0.077113760890257 },
     { 0.048690315425316, 0.638444188569810, 0.312865496004874,  0.077113760890257 },
     { 0.312865496004874, 0.048690315425316, 0.638444188569810,  0.077113760890257 },
@@ -275,15 +275,27 @@ static struct dunavant_rule dunavant_rules[] = {
 } // namespace detail
 
 
-template<typename T>
-std::vector<quadrature_point<T,2>>
-integrate(const simplicial_mesh<T>& msh,
-          const typename simplicial_mesh<T>::face_type& fc,
+template<typename Mesh>
+std::vector<quadrature_point<typename Mesh::coordinate_type,2>>
+integrate(const Mesh& msh,
+          const typename Mesh::face_type& fc,
           size_t degree)
 {
+    using T = typename Mesh::coordinate_type;
     std::vector<quadrature_point<T,2>> ret;
     auto raw_qps = gauss_legendre<T>(degree);
-    //auto meas = measure(msh, fc);
+    auto meas = measure(msh, fc);
+    auto pts  = points(msh, fc);
+
+    for (auto itor = raw_qps.begin(); itor != raw_qps.end(); itor++)
+    {
+        auto raw_qp = *itor;
+        auto t  = raw_qp.first.x();
+        auto qp  = 0.5 * (1 - t) * pts[0] + 0.5 * (1 + t) * pts[1];
+        auto qw  = raw_qp.second * meas * 0.5;
+
+        ret.push_back({qp,qw});
+    }
 
     return ret;
 }
@@ -318,7 +330,97 @@ integrate(const simplicial_mesh<T>& msh,
         auto qp = pts[0]*l0 + pts[1]*l1 + pts[2]*l2;
         auto qw = w*meas;
 
-        ret.push_back({qp,qw});  
+        ret.push_back({qp,qw});
+    }
+
+    return ret;
+}
+
+
+/* Quadrature for cartesian quadrangles, it is just tensorized Gauss points. */
+template<typename T>
+std::vector<std::pair<point<T, 2>, T>>
+quadrangle_quadrature(const size_t degree)
+{
+    auto qps = gauss_legendre<T>(degree);
+
+    std::vector<std::pair<point<T, 2>, T>> ret;
+    ret.reserve(qps.size() * qps.size());
+
+    for (auto jtor = qps.begin(); jtor != qps.end(); jtor++)
+    {
+        auto qp_y = *jtor;
+        auto eta  = qp_y.first.x();
+
+        for (auto itor = qps.begin(); itor != qps.end(); itor++)
+        {
+            auto qp_x = *itor;
+            auto xi   = qp_x.first.x();
+
+            auto qw2d = qp_x.second * qp_y.second;
+            auto qp2d = point<T, 2>({xi, eta});
+
+            ret.push_back({qp2d, qw2d});
+        }
+    }
+
+    return ret;
+}
+
+template<typename T>
+std::vector<quadrature_point<T, 2>>
+integrate(const quad_mesh<T>& msh,
+          const typename quad_mesh<T>::cell& cl,
+          size_t degree)
+{
+    auto raw_qps = quadrangle_quadrature<T>(degree);
+
+    std::vector<quadrature_point<T, 2>> ret;
+    ret.reserve(raw_qps.size());
+
+    auto pts = points(msh, cl);
+
+    auto P = [&](T xi, T eta) -> T {
+        return 0.25 * pts[0].x() * (1 - xi) * (1 - eta) +
+               0.25 * pts[1].x() * (1 + xi) * (1 - eta) +
+               0.25 * pts[2].x() * (1 + xi) * (1 + eta) +
+               0.25 * pts[3].x() * (1 - xi) * (1 + eta);
+    };
+
+    auto Q = [&](T xi, T eta) -> T {
+        return 0.25 * pts[0].y() * (1 - xi) * (1 - eta) +
+               0.25 * pts[1].y() * (1 + xi) * (1 - eta) +
+               0.25 * pts[2].y() * (1 + xi) * (1 + eta) +
+               0.25 * pts[3].y() * (1 - xi) * (1 + eta);
+    };
+
+    auto J = [&](T xi, T eta) -> T {
+        auto j11 = 0.25 * ( (pts[1].x() - pts[0].x()) * (1 - eta) +
+                            (pts[2].x() - pts[3].x()) * (1 + eta) );
+
+        auto j12 = 0.25 * ( (pts[1].y() - pts[0].y()) * (1 - eta) +
+                            (pts[2].y() - pts[3].y()) * (1 + eta) );
+
+        auto j21 = 0.25 * ( (pts[3].x() - pts[0].x()) * (1 - xi) +
+                            (pts[2].x() - pts[1].x()) * (1 + xi) );
+
+        auto j22 = 0.25 * ( (pts[3].y() - pts[0].y()) * (1 - xi) +
+                            (pts[2].y() - pts[1].y()) * (1 + xi) );
+
+        return std::abs(j11 * j22 - j12 * j21);
+    };
+
+    for (auto& raw_qp : raw_qps)
+    {
+        auto xi  = raw_qp.first.x();
+        auto eta = raw_qp.first.y();
+
+        auto px = P(xi, eta);
+        auto py = Q(xi, eta);
+
+        auto qw = raw_qp.second * J(xi, eta);
+        auto qp = point<T, 2>({px, py});
+        ret.push_back({qp, qw});
     }
 
     return ret;

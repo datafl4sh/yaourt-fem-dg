@@ -221,6 +221,20 @@ face_ids(const quad_mesh<T>& msh, const typename quad_mesh<T>::cell_type& cell)
 }
 
 template<typename T>
+std::array<point<T,2>, 2>
+points(const simplicial_mesh<T>& msh,
+       const typename simplicial_mesh<T>::face_type& fc)
+{
+    std::array<point<T,2>, 2> ret;
+
+    ret[0] = *std::next(msh.points.begin(), fc.p0);
+    ret[1] = *std::next(msh.points.begin(), fc.p1);
+
+    return ret;
+}
+
+
+template<typename T>
 std::array<point<T,2>, 3>
 points(const simplicial_mesh<T>& msh,
        const typename simplicial_mesh<T>::cell_type& cl)
@@ -229,6 +243,19 @@ points(const simplicial_mesh<T>& msh,
     ret[0] = msh.points.at(cl.p[0]);
     ret[1] = msh.points.at(cl.p[1]);
     ret[2] = msh.points.at(cl.p[2]);
+    return ret;
+}
+
+template<typename T>
+std::array<point<T,2>, 2>
+points(const quad_mesh<T>& msh,
+       const typename quad_mesh<T>::face_type& fc)
+{
+    std::array<point<T,2>, 2> ret;
+
+    ret[0] = *std::next(msh.points.begin(), fc.p0);
+    ret[1] = *std::next(msh.points.begin(), fc.p1);
+
     return ret;
 }
 
@@ -265,6 +292,17 @@ barycenter(const quad_mesh<T>& msh,
     return (pts[0] + pts[1] + pts[2]+ pts[3]) / 4.0;
 }
 
+
+template<typename Mesh>
+typename Mesh::coordinate_type
+measure(const Mesh& msh,
+        const typename Mesh::face_type& fc)
+{
+    auto pts = points(msh, fc);
+    auto d   = pts[1] - pts[0];
+
+    return std::sqrt(d.x() * d.x() + d.y() * d.y());
+}
 
 template<typename T>
 T
