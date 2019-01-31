@@ -283,7 +283,7 @@ integrate(const simplicial_mesh<T>& msh,
 {
     std::vector<quadrature_point<T,2>> ret;
     auto raw_qps = gauss_legendre<T>(degree);
-    auto meas = measure(msh, fc);
+    //auto meas = measure(msh, fc);
 
     return ret;
 }

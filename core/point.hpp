@@ -129,7 +129,7 @@ public:
     }
 
     point
-    operator*(const T& scalefactor)
+    operator*(const T& scalefactor) const
     {
         point ret = *this;
         ret *= scalefactor;
