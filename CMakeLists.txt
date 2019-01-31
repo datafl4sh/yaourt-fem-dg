@@ -35,3 +35,6 @@ target_link_libraries(dg2d ${LINK_LIBS})
 
 add_executable(continuous_fem continuous_fem.cpp)
 target_link_libraries(continuous_fem ${LINK_LIBS})
+
+add_executable(test_quad test_quad.cpp)
+target_link_libraries(test_quad ${LINK_LIBS})

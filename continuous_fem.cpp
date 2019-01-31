@@ -12,7 +12,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- * 
+ *
  * Toy implememtation of Discontinuous Galerkin for teaching purposes
  *
  * Matteo Cicuttin (c) 2018
@@ -94,6 +94,3 @@ int main(int argc, char **argv)
 
     return 0;
 }
-
-
-

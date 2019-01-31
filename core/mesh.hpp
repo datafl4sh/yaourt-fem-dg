@@ -68,7 +68,7 @@ struct edge
     size_t  p0, p1, pb;
     bool    is_boundary, is_broken;
     size_t  boundary_id;
-    
+
     auto point_ids() const { return std::array<size_t,2>({p0, p1}); }
 };
 
@@ -92,6 +92,32 @@ struct triangle
 
     friend std::ostream& operator<<(std::ostream& os, const triangle& t) {
         os << "Triangle: " << t.p[0] << " " << t.p[1] << " " << t.p[2];
+        return os;
+    }
+
+    auto point_ids() const { return p; }
+};
+
+struct quadrangle
+{
+    quadrangle() {}
+
+    quadrangle(size_t ap0, size_t ap1, size_t ap2, size_t ap3)
+        : p{ap0, ap1, ap2, ap3}
+    {
+        //std::sort(p.begin(), p.end());
+    }
+
+    std::array<size_t, 4> p;
+
+    friend bool operator<(const quadrangle& a, const quadrangle& b) {
+        return std::lexicographical_compare( a.p.begin(), a.p.end(),
+                                             b.p.begin(), b.p.end() );
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const quadrangle& t) {
+        os  << "Quadrangle: " << t.p[0] << " " << t.p[1] << " " << t.p[2];
+        os  << " " << t.p[3];
         return os;
     }
 
@@ -125,6 +151,8 @@ bool is_boundary(const edge& e)
 template<typename T>
 using simplicial_mesh = mesh<T, triangle>;
 
+template<typename T>
+using quad_mesh = mesh<T, quadrangle>;
 
 template<typename Mesh>
 size_t
@@ -151,6 +179,21 @@ faces(const simplicial_mesh<T>& msh, const typename simplicial_mesh<T>::cell_typ
 }
 
 template<typename T>
+std::array<typename quad_mesh<T>::face_type, 4>
+faces(const quad_mesh<T>& msh, const typename quad_mesh<T>::cell_type& cell)
+{
+    using face_type = typename quad_mesh<T>::face_type;
+
+    std::array<face_type, 4> ret;
+    ret[0] = msh.faces.at( offset(msh, face_type(cell.p[0], cell.p[1])) );
+    ret[1] = msh.faces.at( offset(msh, face_type(cell.p[1], cell.p[2])) );
+    ret[2] = msh.faces.at( offset(msh, face_type(cell.p[2], cell.p[3])) );
+    ret[3] = msh.faces.at( offset(msh, face_type(cell.p[0], cell.p[3])) );
+    return ret;
+}
+
+
+template<typename T>
 std::array<size_t, 3>
 face_ids(const simplicial_mesh<T>& msh, const typename simplicial_mesh<T>::cell_type& cell)
 {
@@ -160,6 +203,20 @@ face_ids(const simplicial_mesh<T>& msh, const typename simplicial_mesh<T>::cell_
     ret[0] = offset(msh, face_type(cell.p[0], cell.p[1]));
     ret[1] = offset(msh, face_type(cell.p[1], cell.p[2]));
     ret[2] = offset(msh, face_type(cell.p[0], cell.p[2]));
+    return ret;
+}
+
+template<typename T>
+std::array<size_t, 4>
+face_ids(const quad_mesh<T>& msh, const typename quad_mesh<T>::cell_type& cell)
+{
+    using face_type = typename quad_mesh<T>::face_type;
+
+    std::array<size_t, 4> ret;
+    ret[0] = offset(msh, face_type(cell.p[0], cell.p[1]));
+    ret[1] = offset(msh, face_type(cell.p[1], cell.p[2]));
+    ret[2] = offset(msh, face_type(cell.p[2], cell.p[3]));
+    ret[3] = offset(msh, face_type(cell.p[0], cell.p[3]));
     return ret;
 }
 
@@ -176,6 +233,20 @@ points(const simplicial_mesh<T>& msh,
 }
 
 template<typename T>
+std::array<point<T,2>, 4>
+points(const quad_mesh<T>& msh,
+       const typename quad_mesh<T>::cell_type& cl)
+{
+    std::array<point<T,2>, 4> ret;
+    ret[0] = msh.points.at(cl.p[0]);
+    ret[1] = msh.points.at(cl.p[1]);
+    ret[2] = msh.points.at(cl.p[2]);
+    ret[3] = msh.points.at(cl.p[3]);
+
+    return ret;
+}
+
+template<typename T>
 typename simplicial_mesh<T>::point_type
 barycenter(const simplicial_mesh<T>& msh,
            const typename simplicial_mesh<T>::cell_type& cl)
@@ -183,6 +254,17 @@ barycenter(const simplicial_mesh<T>& msh,
     auto pts = points(msh, cl);
     return (pts[0] + pts[1] + pts[2]) / 3.0;
 }
+
+
+template<typename T>
+typename quad_mesh<T>::point_type
+barycenter(const quad_mesh<T>& msh,
+           const typename quad_mesh<T>::cell_type& cl)
+{
+    auto pts = points(msh, cl);
+    return (pts[0] + pts[1] + pts[2]+ pts[3]) / 4.0;
+}
+
 
 template<typename T>
 T
@@ -194,6 +276,25 @@ measure(const simplicial_mesh<T>& msh,
     auto v2 = pts[2] - pts[0];
     return ( v1.x() * v2.y() - v1.y() * v2.x() )/2.0;
 }
+
+template<typename T>
+T
+measure(const quad_mesh<T>& msh, const typename quad_mesh<T>::cell& cl)
+{
+    auto pts = points(msh, cl);
+
+    T meas = 0.0;
+    auto v1 = pts[1] - pts[0];
+    auto v2 = pts[2] - pts[0];
+    auto v3 = pts[2] - pts[1];
+    auto v4 = pts[3] - pts[1];
+
+    meas += std::abs(v1.x()*v2.y() - v2.x()*v1.y())/2.0;
+    meas += std::abs(v3.x()*v4.y() - v4.x()*v3.y())/2.0;
+
+    return meas;
+}
+
 
 enum class boundary_condition {
     NONE,
