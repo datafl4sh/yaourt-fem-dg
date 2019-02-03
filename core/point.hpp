@@ -95,7 +95,7 @@ public:
     }
 
     point
-    operator+(const point& other)
+    operator+(const point& other) const
     {
         point ret = *this;
         ret += other;
@@ -112,7 +112,7 @@ public:
     }
 
     point
-    operator-(const point& other)
+    operator-(const point& other) const
     {
         point ret = *this;
         ret -= other;
@@ -153,7 +153,7 @@ public:
     }
 
     point
-    operator/(const T& scalefactor)
+    operator/(const T& scalefactor) const
     {
         point ret = *this;
         ret /= scalefactor;
@@ -161,6 +161,17 @@ public:
     }
 };
 
+template<typename T, size_t DIM>
+T
+distance(const point<T,DIM>& p1, const point<T,DIM>& p2)
+{
+    auto acc = 0.0;
+
+    for (size_t i = 0; i < DIM; i++)
+        acc += (p1[i] - p2[i])*(p1[i] - p2[i]);
+
+    return std::sqrt(acc);
+}
 
 template<typename T>
 T

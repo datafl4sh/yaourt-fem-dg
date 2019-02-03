@@ -370,7 +370,7 @@ quadrangle_quadrature(const size_t degree)
 template<typename T>
 std::vector<quadrature_point<T, 2>>
 integrate(const quad_mesh<T>& msh,
-          const typename quad_mesh<T>::cell& cl,
+          const typename quad_mesh<T>::cell_type& cl,
           size_t degree)
 {
     auto raw_qps = quadrangle_quadrature<T>(degree);

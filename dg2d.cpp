@@ -1,36 +1,228 @@
 #include <iostream>
+#include <fstream>
 
 #include "core/mesh.hpp"
 #include "core/meshers.hpp"
 #include "core/quadratures.hpp"
+#include "core/bases.hpp"
+#include "core/solvers.hpp"
+#include "core/blaze_sparse_init.hpp"
+#include "core/dataio.hpp"
+
+
+template<typename Mesh>
+class assembler
+{
+    using T = typename Mesh::coordinate_type;
+    using triplet_type = blaze::triplet<T>;
+
+    std::vector<triplet_type>       triplets;
+
+    size_t                          sys_size, basis_size;
+
+public:
+    blaze::CompressedMatrix<T>      lhs;
+    blaze::DynamicVector<T>         rhs;
+
+    assembler()
+    {}
+
+    assembler(const Mesh& msh, size_t degree)
+    {
+        basis_size = dg2d::bases::scalar_basis_size(degree,2);
+        sys_size = basis_size * msh.cells.size();
+
+        lhs.resize( sys_size, sys_size );
+        rhs.resize( sys_size );
+    }
+
+    bool assemble(const Mesh& msh,
+                  const typename Mesh::cell_type& cl_a,
+                  const typename Mesh::cell_type& cl_b,
+                  const blaze::DynamicMatrix<T>& local_rhs)
+    {
+        auto cl_a_ofs = offset(msh, cl_a) * basis_size;
+        auto cl_b_ofs = offset(msh, cl_b) * basis_size;
+
+        for (size_t i = 0; i < basis_size; i++)
+        {
+            auto ci = cl_a_ofs + i;
+
+            for (size_t j = 0; j < basis_size; j++)
+            {
+                auto cj = cl_b_ofs + j;
+                triplets.push_back( {ci, cj, local_rhs(i,j)} );
+            }
+        }
+        
+        return true;
+    }
+
+    bool assemble(const Mesh& msh, const typename Mesh::cell_type& cl,
+                  const blaze::DynamicMatrix<T>& local_rhs,
+                  const blaze::DynamicVector<T>& local_lhs)
+    {
+        auto cl_ofs = offset(msh, cl) * basis_size;
+
+        for (size_t i = 0; i < basis_size; i++)
+        {
+            auto ci = cl_ofs + i;
+
+            for (size_t j = 0; j < basis_size; j++)
+            {
+                auto cj = cl_ofs + j;
+                triplets.push_back( {ci, cj, local_rhs(i,j)} );
+            }
+
+            rhs[ci] = local_lhs[i];
+        }
+        
+        return true;
+    }
+
+    void finalize()
+    {
+        blaze::init_from_triplets(lhs, triplets.begin(), triplets.end());
+        triplets.clear();
+    }
+
+    size_t system_size() const { return sys_size; }
+};
 
 int main(void)
 {
     using T = double;
+    using mesh_type = dg2d::quad_mesh<T>;
 
-    dg2d::simplicial_mesh<T> msh;
+    mesh_type msh;
     auto mesher = dg2d::get_mesher(msh);
 
-    mesher.create_mesh(msh, 6);
+    mesher.create_mesh(msh,4);
 
-    T area = 0;
+    msh.compute_connectivity();
 
-    for (auto& cl : msh.cells)
+    size_t degree = 2;
+    T eta = 5;
+
+    auto rhs_fun = [](const typename mesh_type::point_type& pt) -> auto {
+        auto sx = std::sin(M_PI*pt.x());
+        auto sy = std::sin(M_PI*pt.y());
+
+        return 2.0 * M_PI * M_PI * sx * sy;
+    };
+
+
+    assembler<mesh_type> assm(msh, degree);
+
+
+    std::ofstream ofs("basis.dat");
+
+    for (auto& tcl : msh.cells)
     {
-        auto qps = dg2d::quadratures::integrate(msh, cl, 2);
+        auto qps = dg2d::quadratures::integrate(msh, tcl, 2*degree);
+        auto tbasis = dg2d::bases::make_basis(msh, tcl, degree);
+
+        blaze::DynamicMatrix<T> K(tbasis.size(), tbasis.size(), 0.0);
+        blaze::DynamicVector<T> loc_rhs(tbasis.size(), 0.0);
 
         for (auto& qp : qps)
         {
-            area += qp.weight();
+            auto ep   = qp.point();
+            auto phi  = tbasis.eval(ep);
+            auto dphi = tbasis.eval_grads(ep);
+
+            K += qp.weight() * dphi * trans(dphi);
+
+            loc_rhs += qp.weight() * rhs_fun(ep) * phi;
+        }
+
+        assm.assemble(msh, tcl, K, loc_rhs);
+
+        auto fcs = faces(msh, tcl);
+        for (auto& fc : fcs)
+        {
+            blaze::DynamicMatrix<T> Att(tbasis.size(), tbasis.size(), 0.0);
+            blaze::DynamicMatrix<T> Atn(tbasis.size(), tbasis.size(), 0.0);
+            blaze::DynamicMatrix<T> Ant(tbasis.size(), tbasis.size(), 0.0);
+            blaze::DynamicMatrix<T> Ann(tbasis.size(), tbasis.size(), 0.0);
+
+            auto nv = neighbour_via(msh, tcl, fc);
+            auto ncl = nv.first;
+            auto nbasis = dg2d::bases::make_basis(msh, ncl, degree);
+            assert(tbasis.size() == nbasis.size());
+
+            auto f_qps = dg2d::quadratures::integrate(msh, fc, 2*degree);
+
+            for (auto& fqp : f_qps)
+            {
+                auto ep     = fqp.point();
+                auto tphi   = tbasis.eval(ep);
+                auto tdphi  = tbasis.eval_grads(ep);
+                auto nt     = normal(msh, tcl, fc);
+
+                Att  = + eta * tphi * trans(tphi);
+                Att += - 0.5 * tphi * trans(tdphi*nt);
+                Att += - 0.5 * (tdphi*nt) * trans(tphi); 
+
+                if (!nv.second) /* It is a boundary face, no other terms */
+                    continue;
+
+                auto nphi   = nbasis.eval(ep);
+                auto ndphi  = nbasis.eval_grads(ep);
+                auto nn     = normal(msh, ncl, fc);
+
+                Atn  = - eta * tphi * trans(nphi);
+                Atn += - 0.5 * tphi * trans(ndphi*nt);
+                Atn += + 0.5 * (tdphi*nn) * trans(nphi);
+
+                Ant  = - eta * nphi * trans(tphi);
+                Ant += + 0.5 * nphi * trans(tdphi*nn);
+                Ant += - 0.5 * (ndphi*nt) * trans(tphi);
+
+                Ann  = + eta * nphi * trans(nphi);
+                Ann += + 0.5 * nphi * trans(ndphi*nn);
+                Ann += + 0.5 * (ndphi*nn) * trans(nphi);
+            }
+
+            assm.assemble(msh, tcl, tcl, Att);
+            if (nv.second)
+            {
+                assm.assemble(msh, tcl, ncl, Atn);
+                assm.assemble(msh, ncl, tcl, Ant);
+                assm.assemble(msh, ncl, ncl, Ann);
+            }
         }
     }
 
-    std::cout << area << std::endl;
+    assm.finalize();
 
-    for (auto& fc : msh.faces)
+    blaze::DynamicVector<T> sol(assm.system_size());
+
+    conjugated_gradient_params<T> cgp;
+    cgp.verbose = true;
+    cgp.rr_max = 1000;
+    cgp.max_iter = 2*assm.system_size();
+
+    //std::cout << assm.lhs << std::endl;
+
+    conjugated_gradient(cgp, assm.lhs, assm.rhs, sol);
+
+    blaze::DynamicVector<T> var(msh.cells.size());
+    auto bs = dg2d::bases::scalar_basis_size(degree, 2);
+    for (size_t i = 0; i < msh.cells.size(); i++)
     {
-        auto qps = dg2d::quadratures::integrate(msh, fc, 2);
+        var[i] = sol[bs*i];
     }
+
+#ifdef WITH_SILO
+    dg2d::silo_database silo;
+    silo.create("test_dg.silo");
+
+    silo.add_mesh(msh, "test_mesh");
+
+    silo.add_zonal_variable("test_mesh", "solution", var);
+#endif
+
 
     return 0;
 }

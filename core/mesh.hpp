@@ -5,6 +5,8 @@
 #include <cassert>
 #include <cmath>
 
+#include <blaze/Math.h>
+
 #include "point.hpp"
 
 namespace dg2d {
@@ -125,12 +127,17 @@ struct quadrangle
     auto point_ids() const { return p; }
 };
 
-template<typename T, typename CellT>
-class mesh
+#define NO_OWNER (~0)
+
+template<typename T, size_t DIM, typename CellT, typename FaceT>
+class mesh;
+
+template<typename T, typename CellT, typename FaceT>
+class mesh<T, 2, CellT, FaceT>
 {
 public:
     using coordinate_type   = T;
-    using face_type         = edge;
+    using face_type         = FaceT;
     using cell_type         = CellT;
     using point_type        = point<T,2>;
 
@@ -142,18 +149,109 @@ public:
 
     mesh()
     {}
+
+    void compute_connectivity()
+    {
+        face_owners.resize( faces.size() );
+
+        for (auto& fo : face_owners)
+        {
+            fo[0] = NO_OWNER;
+            fo[1] = NO_OWNER;
+        }
+
+        size_t cell_id = 0;
+        for (auto& cl : cells)
+        {
+            auto fcids = face_ids(*this, cl);
+
+            for (auto& fcid : fcids)
+            {
+                auto& fo = face_owners.at(fcid);
+                if (fo[0] == NO_OWNER)
+                    fo[0] = cell_id;
+                else if (fo[1] == NO_OWNER)
+                    fo[1] = cell_id;
+                else
+                    throw std::logic_error("BUG: a face has max 2 owners"); 
+            }
+
+            ++cell_id;
+        }
+    }
 };
 
-bool is_boundary(const edge& e)
+template<typename T, typename CellT, typename FaceT>
+class mesh<T, 3, CellT, FaceT>
 {
-    return e.is_boundary;
+public:
+    using coordinate_type   = T;
+    using edge_type         = edge;
+    using face_type         = FaceT;
+    using cell_type         = CellT;
+    using point_type        = point<T,3>;
+
+    std::vector<point_type>     points;
+    std::vector<edge_type>      edges;
+    std::vector<face_type>      faces;
+    std::vector<cell_type>      cells;
+
+    std::vector<std::array<size_t,2>> face_owners;
+
+    mesh()
+    {}
+};
+
+template<template<typename, size_t, typename, typename> class Mesh,
+         typename T, typename CellT, typename FaceT>
+bool is_boundary(const Mesh<T, 2, CellT, FaceT>& msh,
+                 const typename Mesh<T,2,CellT,FaceT>::face_type& f)
+{
+    return f.is_boundary;
 }
 
 template<typename T>
-using simplicial_mesh = mesh<T, triangle>;
+using simplicial_mesh = mesh<T, 2, triangle, edge>;
 
 template<typename T>
-using quad_mesh = mesh<T, quadrangle>;
+using quad_mesh = mesh<T, 2, quadrangle, edge>;
+
+template<typename Mesh>
+std::pair<typename Mesh::cell_type, bool>
+neighbour_via(const Mesh& msh,
+              const typename Mesh::cell_type& cl,
+              const typename Mesh::face_type& fc)
+{
+    if ( msh.face_owners.size() != msh.faces.size() )
+        throw std::logic_error("No neighbour information.");
+
+    auto cl_ofs = offset(msh, cl);
+    auto fc_ofs = offset(msh, fc);
+
+    auto fo = msh.face_owners.at( fc_ofs );
+
+    if ( fo[0] != cl_ofs )
+        std::swap(fo[0], fo[1]);
+
+    assert(fo[0] == cl_ofs);
+
+    if (fo[1] == NO_OWNER)
+        return std::make_pair(msh.cells[0], false);
+
+    return std::make_pair(msh.cells.at(fo[1]), true);
+}
+
+template<typename Mesh>
+size_t
+offset(const Mesh& msh, const typename Mesh::cell_type& cl)
+{
+    auto itor = std::lower_bound(msh.cells.begin(), msh.cells.end(), cl);
+    if (itor == msh.cells.end())
+        throw std::invalid_argument("Mesh cell not found");
+
+    return std::distance(msh.cells.begin(), itor);
+}
+
 
 template<typename Mesh>
 size_t
@@ -274,6 +372,16 @@ points(const quad_mesh<T>& msh,
     return ret;
 }
 
+template<template<typename, size_t, typename, typename> class Mesh,
+         typename T, typename CellT, typename FaceT>
+typename Mesh<T,2,CellT,FaceT>::point_type
+barycenter(const Mesh<T,2,CellT,FaceT>& msh,
+           const FaceT& fc)
+{
+    auto pts = points(msh, fc);
+    return (pts[0] + pts[1]) / 2.0;
+}
+
 template<typename T>
 typename simplicial_mesh<T>::point_type
 barycenter(const simplicial_mesh<T>& msh,
@@ -293,45 +401,74 @@ barycenter(const quad_mesh<T>& msh,
     return (pts[0] + pts[1] + pts[2]+ pts[3]) / 4.0;
 }
 
+template<template<typename, size_t, typename, typename> class Mesh,
+         typename T, typename CellT, typename FaceT>
+T
+measure(const Mesh<T,2,CellT,FaceT>& msh, const CellT& cl)
+{
+    auto pts = points(msh, cl);
 
-template<typename Mesh>
-typename Mesh::coordinate_type
-measure(const Mesh& msh,
-        const typename Mesh::face_type& fc)
+    T acc = 0.0;
+    for (size_t i = 1; i < pts.size() - 1; i++)
+    {
+        auto d0 = pts.at(i) - pts.at(0);
+        auto d1 = pts.at(i+1) - pts.at(0);
+        acc += std::abs(d0.x()*d1.y() - d1.x()*d0.y())/T(2);
+    }
+
+    return acc;
+}
+
+template<template<typename, size_t, typename, typename> class Mesh,
+         typename T, typename CellT, typename FaceT>
+T
+measure(const Mesh<T,2,CellT,FaceT>& msh, const FaceT& fc)
 {
     auto pts = points(msh, fc);
-    auto d   = pts[1] - pts[0];
-
-    return std::sqrt(d.x() * d.x() + d.y() * d.y());
+    assert(pts.size() == 2);
+    return distance(pts[0], pts[1]);
 }
 
-template<typename T>
-T
-measure(const simplicial_mesh<T>& msh,
-        const typename simplicial_mesh<T>::cell_type& cl)
+template<typename Mesh, typename Element>
+typename Mesh::coordinate_type
+diameter(const Mesh& msh, const Element& elem)
 {
-    auto pts = points(msh, cl);
-    auto v1 = pts[1] - pts[0];
-    auto v2 = pts[2] - pts[0];
-    return ( v1.x() * v2.y() - v1.y() * v2.x() )/2.0;
+    const auto pts = points(msh, elem);
+
+    typename Mesh::coordinate_type diam = 0.;
+
+    for (size_t i = 0; i < pts.size(); i++)
+        for (size_t j = i+1; j < pts.size(); j++)
+            diam = std::max( distance(pts[i], pts[j]), diam );
+
+    return diam;
 }
 
-template<typename T>
-T
-measure(const quad_mesh<T>& msh, const typename quad_mesh<T>::cell& cl)
+template<template<typename, size_t, typename, typename> class Mesh,
+         typename T, typename CellT, typename FaceT>
+blaze::StaticVector<T,2>
+normal(const Mesh<T,2,CellT,FaceT>& msh, const CellT& cl, const FaceT& fc)
 {
-    auto pts = points(msh, cl);
+    auto pts = points(msh, fc);
+    assert(pts.size() == 2);
 
-    T meas = 0.0;
-    auto v1 = pts[1] - pts[0];
-    auto v2 = pts[2] - pts[0];
-    auto v3 = pts[2] - pts[1];
-    auto v4 = pts[3] - pts[1];
+    auto v = pts[1] - pts[0];
 
-    meas += std::abs(v1.x()*v2.y() - v2.x()*v1.y())/2.0;
-    meas += std::abs(v3.x()*v4.y() - v4.x()*v3.y())/2.0;
+    blaze::StaticVector<T,2> n;
+    n[0] = -v.y();
+    n[1] = v.x();
 
-    return meas;
+    auto cell_bar = barycenter(msh, cl);
+    auto face_bar = barycenter(msh, fc);
+    auto ov_temp = face_bar - cell_bar;
+    blaze::StaticVector<T,2> outward_vector;
+    outward_vector[0] = ov_temp.x();
+    outward_vector[1] = ov_temp.y();
+
+    if ( dot(n,outward_vector) < T(0) )
+        return normalize(-n);
+
+    return normalize(n);
 }
 
 

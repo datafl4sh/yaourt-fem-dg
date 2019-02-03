@@ -102,7 +102,7 @@ public:
         dirichlet_nodes.resize( msh.points.size() );
         for (auto& f : msh.faces)
         {
-            if ( is_boundary(f) )
+            if ( is_boundary(msh, f) )
             {
                 auto pts = f.point_ids();
                 assert(pts.size() == 2);
