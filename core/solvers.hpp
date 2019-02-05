@@ -107,3 +107,131 @@ conjugated_gradient(const conjugated_gradient_params<T>& cgp,
 
     return true;
 }
+
+template<typename T>
+bool
+qmr(const blaze::CompressedMatrix<T>& A,
+    const blaze::DynamicVector<T>& b,
+    blaze::DynamicVector<T>& x)
+{
+    size_t  N = A.columns();
+    size_t  iter = 0;
+    T       nr, nr0;
+    T       alpha, rho, rho1, xi, beta, gamma, gamma1, eta, delta, epsilon, theta, theta1;
+    
+    blaze::DynamicVector<T> r(N), r0(N);
+    blaze::DynamicVector<T> d, s, p, p_tilde, q, v, v_tilde, w, w_tilde, y, y_tilde, z, z_tilde;
+    
+    r0 = r = b - A*x;
+    nr = nr0 = norm(r);
+    
+    v_tilde = r;
+    y = /*eiM **/ v_tilde; // pre
+    rho = norm(y);
+    w_tilde = r;
+    z = /*eiM **/ w_tilde; // pre
+    xi = norm(z);
+    gamma = 1;
+    eta = -1;
+    
+    std::ofstream ofs("qmr_nopre_convergence.txt");
+    
+    while ( nr/nr0 > 1e-8 && iter < N*10 && nr/nr0 < 10000 )
+    {
+        std::cout << "                                                 \r";
+        std::cout << " -> Iteration " << iter << ", rr = ";
+        std::cout << nr/nr0 << "\b\r";
+        std::cout.flush();
+        
+        ofs << nr/nr0 << std::endl;
+        
+        if (abs(rho) < 1e-15 or abs(xi) < 1e-15)
+        {
+            std::cout << "QMR failed (rho, xi)" << std::endl;
+            return false;
+        }
+        
+        v = v_tilde / rho;
+        y = y / rho;
+        w = w_tilde / xi;
+        z = z / xi;
+        delta = dot(z,y);
+        if (abs(delta) < 1e-15)
+        {
+            std::cout << "QMR failed (delta)" << std::endl;
+            return false;
+        }
+        y_tilde = /*eiM **/ y; // pre
+        z_tilde = /*eiM **/ z; // pre
+        
+        if (iter == 0)
+        {
+            p = y_tilde;
+            q = z_tilde;
+        }
+        else
+        {
+            p = y_tilde - (xi*delta/epsilon)*p;
+            q = z_tilde - (rho*(delta/epsilon))*q;
+        }
+        
+        p_tilde = A*p;
+        epsilon = dot(q, p_tilde);
+        if (abs(epsilon) < 1e-15)
+        {
+            std::cout << "QMR failed (epsilon)" << std::endl;
+            return false;
+        }
+        beta = epsilon/delta;
+        if (abs(beta) < 1e-15)
+        {
+            std::cout << "QMR failed (beta)" << std::endl;
+            return false;
+        }
+        v_tilde = p_tilde - beta*v;
+        y = /*eiM **/ v_tilde; // pre
+        rho1 = rho;
+        rho = norm(y);
+        w_tilde = trans(A)*q - beta*w;
+        z = /*eiM **/ w_tilde; // pre
+        xi = norm(z);
+        
+        if (iter > 0)
+            theta1 = theta;
+        
+        theta = rho/(gamma * std::abs(beta));
+        gamma1 = gamma;
+        
+        gamma = 1.0/sqrt(1.0+theta*theta);
+        if (abs(gamma) < 1e-15)
+        {
+            std::cout << "QMR failed (gamma)" << std::endl;
+            return false;
+        }
+        eta = -eta*rho1*gamma*gamma/(beta*gamma1*gamma1);
+        
+        if (iter == 0)
+        {
+            d = eta*p;
+            s = eta*p_tilde;
+        }
+        else
+        {
+            d = eta*p + (theta1*gamma)*(theta1*gamma)*d;
+            s = eta*p_tilde + (theta1*gamma)*(theta1*gamma)*s;
+        }
+        
+        x = x + d;
+        r = r - s;
+        
+        nr = norm(r);
+        iter++;
+    }
+    
+    ofs << nr/nr0 << std::endl;
+    ofs.close();
+    
+    std::cout << " -> Iteration " << iter << ", rr = " << nr/nr0 << std::endl;
+    
+    return true;
+}

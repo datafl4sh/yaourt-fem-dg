@@ -92,7 +92,7 @@ public:
 int main(void)
 {
     using T = double;
-    using mesh_type = dg2d::quad_mesh<T>;
+    using mesh_type = dg2d::simplicial_mesh<T>;
 
     mesh_type msh;
     auto mesher = dg2d::get_mesher(msh);
@@ -102,7 +102,7 @@ int main(void)
     msh.compute_connectivity();
 
     size_t degree = 2;
-    T eta = 5;
+    T eta = 10*degree*degree;
 
     auto rhs_fun = [](const typename mesh_type::point_type& pt) -> auto {
         auto sx = std::sin(M_PI*pt.x());
@@ -119,7 +119,7 @@ int main(void)
 
     for (auto& tcl : msh.cells)
     {
-        auto qps = dg2d::quadratures::integrate(msh, tcl, 2*degree);
+        auto qps = dg2d::quadratures::integrate(msh, tcl, 2*degree+2);
         auto tbasis = dg2d::bases::make_basis(msh, tcl, degree);
 
         blaze::DynamicMatrix<T> K(tbasis.size(), tbasis.size(), 0.0);
@@ -151,45 +151,52 @@ int main(void)
             auto nbasis = dg2d::bases::make_basis(msh, ncl, degree);
             assert(tbasis.size() == nbasis.size());
 
-            auto f_qps = dg2d::quadratures::integrate(msh, fc, 2*degree);
-
+            auto n       = normal(msh, tcl, fc);
+            auto eta_l  = eta / diameter(msh, fc);
+            auto f_qps = dg2d::quadratures::integrate(msh, fc, 2*degree+2);
+            
             for (auto& fqp : f_qps)
             {
                 auto ep     = fqp.point();
                 auto tphi   = tbasis.eval(ep);
                 auto tdphi  = tbasis.eval_grads(ep);
-                auto nt     = normal(msh, tcl, fc);
 
-                Att  = + eta * tphi * trans(tphi);
-                Att += - 0.5 * tphi * trans(tdphi*nt);
-                Att += - 0.5 * (tdphi*nt) * trans(tphi); 
-
-                if (!nv.second) /* It is a boundary face, no other terms */
+                if (nv.second)
+                {
+                    Att  = + fqp.weight() * eta_l * tphi * trans(tphi);
+                    Att += - fqp.weight() * 0.5 * tphi * trans(tdphi*n);
+                    Att += - fqp.weight() * 0.5 * (tdphi*n) * trans(tphi);
+                }
+                else
+                {
+                    Att  = + fqp.weight() * eta_l * tphi * trans(tphi);
+                    Att += - fqp.weight() * tphi * trans(tdphi*n);
+                    Att += - fqp.weight() * (tdphi*n) * trans(tphi);
                     continue;
+                }
 
                 auto nphi   = nbasis.eval(ep);
                 auto ndphi  = nbasis.eval_grads(ep);
-                auto nn     = normal(msh, ncl, fc);
 
-                Atn  = - eta * tphi * trans(nphi);
-                Atn += - 0.5 * tphi * trans(ndphi*nt);
-                Atn += + 0.5 * (tdphi*nn) * trans(nphi);
+                Atn  = - fqp.weight() * eta_l * tphi * trans(nphi);
+                Atn += - fqp.weight() * 0.5 * tphi * trans(ndphi*n);
+                Atn += + fqp.weight() * 0.5 * (tdphi*n) * trans(nphi); 
 
-                Ant  = - eta * nphi * trans(tphi);
-                Ant += + 0.5 * nphi * trans(tdphi*nn);
-                Ant += - 0.5 * (ndphi*nt) * trans(tphi);
+                //Ant  = - fqp.weight() * eta_l * nphi * trans(tphi);
+                //Ant += + fqp.weight() * 0.5 * (ndphi*n) * trans(tphi);
+                //Ant += - fqp.weight() * 0.5 * nphi * trans(tdphi*n);
 
-                Ann  = + eta * nphi * trans(nphi);
-                Ann += + 0.5 * nphi * trans(ndphi*nn);
-                Ann += + 0.5 * (ndphi*nn) * trans(nphi);
+                //Ann  = + fqp.weight() * eta_l * nphi * trans(nphi);
+                //Ann += + fqp.weight() * 0.5 * (ndphi*n) * trans(nphi);
+                //Ann += + fqp.weight() * 0.5 * nphi * trans(ndphi*n);
             }
 
             assm.assemble(msh, tcl, tcl, Att);
             if (nv.second)
             {
                 assm.assemble(msh, tcl, ncl, Atn);
-                assm.assemble(msh, ncl, tcl, Ant);
-                assm.assemble(msh, ncl, ncl, Ann);
+                //assm.assemble(msh, ncl, tcl, Ant);
+                //assm.assemble(msh, ncl, ncl, Ann);
             }
         }
     }
@@ -200,12 +207,14 @@ int main(void)
 
     conjugated_gradient_params<T> cgp;
     cgp.verbose = true;
-    cgp.rr_max = 1000;
+    cgp.rr_max = 10000;
     cgp.max_iter = 2*assm.system_size();
 
-    //std::cout << assm.lhs << std::endl;
-
     conjugated_gradient(cgp, assm.lhs, assm.rhs, sol);
+    //qmr(assm.lhs, assm.rhs, sol);
+
+    //blaze::DynamicMatrix<T> A(assm.lhs);
+    //sol = inv(A)*assm.rhs;
 
     blaze::DynamicVector<T> var(msh.cells.size());
     auto bs = dg2d::bases::scalar_basis_size(degree, 2);
