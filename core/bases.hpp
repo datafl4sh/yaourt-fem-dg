@@ -154,7 +154,7 @@ class scalar_basis<Mesh<T,2,CellT,FaceT>, FaceT>
     typedef FaceT                   elem_type;
     typedef point<T,2>              point_type;
 
-    point_type      elem_bar;
+    point_type      elem_bar, p0;
     size_t          basis_degree, basis_size;
     T               elem_h;
 
@@ -164,6 +164,42 @@ public:
         elem_bar        = barycenter(msh, elem);
         elem_h          = diameter(msh, elem);
         basis_degree    = degree;
+        basis_size      = scalar_basis_size(degree, 1);
+
+        auto pts = points(msh, elem);
+        p0 = pts[0];
+    }
+
+    blaze::DynamicVector<T>
+    eval(const point_type& pt) const
+    {
+        blaze::DynamicVector<T> ret(basis_size);
+
+        const auto vp   = (p0 - elem_bar);
+        const auto tp   = (pt - elem_bar);
+        blaze::StaticVector<T,2> v({vp.x(), vp.y()});
+        blaze::StaticVector<T,2> t({tp.x(), tp.y()});
+        const auto d = dot(v,t);
+        const auto ep  = 4.0 * d / (elem_h * elem_h);
+
+        for (size_t i = 0; i <= basis_degree; i++)
+        {
+            const auto bv = iexp_pow(ep, i);
+            ret[i]  = bv;
+        }
+        return ret;
+    }
+
+    size_t
+    size() const
+    {
+        return basis_size;
+    }
+
+    size_t
+    degree() const
+    {
+        return basis_degree;
     }
 };
 

@@ -471,6 +471,56 @@ normal(const Mesh<T,2,CellT,FaceT>& msh, const CellT& cl, const FaceT& fc)
     return normalize(n);
 }
 
+template<typename Mesh>
+void shatter_mesh(Mesh& msh, typename Mesh::coordinate_type shatter_factor)
+{
+    using mesh_type = Mesh;
+    using point_type = typename mesh_type::point_type;
+    using T = typename mesh_type::coordinate_type;
+
+    if (shatter_factor < 0.0)
+        shatter_factor = 0.0;
+
+    if (shatter_factor > 0.5)
+        shatter_factor = 0.5;
+
+    T avg_h = 0.0;
+
+    for (auto& cl : msh.cells)
+        avg_h += diameter(msh, cl);
+    avg_h /= msh.cells.size();
+
+    std::vector<bool> bnd_nodes( msh.points.size() );
+
+    for (auto& fc : msh.faces)
+    {
+        auto ptids = fc.point_ids();
+        assert(ptids.size() == 2);
+        
+        if ( !is_boundary(msh, fc) )
+            continue;
+
+        bnd_nodes.at(ptids[0]) = true;
+        bnd_nodes.at(ptids[1]) = true;
+    }
+
+    auto delta = avg_h*shatter_factor;
+    std::default_random_engine generator;
+    std::uniform_real_distribution<T> distribution(-delta,delta);
+
+    size_t ppos = 0;
+    for (auto& pt : msh.points)
+    {
+        if (bnd_nodes[ppos++])
+            continue;
+        auto dx = distribution(generator);
+        auto dy = distribution(generator);
+    
+        point_type d = point_type(dx, dy);
+        pt += d;
+    }
+}
+
 
 enum class boundary_condition {
     NONE,

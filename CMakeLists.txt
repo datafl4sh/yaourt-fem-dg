@@ -9,6 +9,7 @@ set (CMAKE_MODULE_PATH
      ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 
+#set(CMAKE_CXX_FLAGS_DEBUG "-g -fpermissive -fsanitize=address")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -fpermissive")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -fpermissive -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASEASSERT "-O3 -g -fpermissive")
@@ -32,7 +33,7 @@ include_directories("${PROJECT_SOURCE_DIR}")
 include_directories(blaze)
 add_subdirectory(blaze)
 
-#add_subdirectory(tests)
+add_subdirectory(tests)
 
 add_executable(dg2d dg2d.cpp)
 target_link_libraries(dg2d ${LINK_LIBS})

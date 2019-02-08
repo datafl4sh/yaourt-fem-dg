@@ -48,6 +48,8 @@
 #include "core/point.hpp"
 #include "core/mesh.hpp"
 
+#define USE_DUNAVANT
+
 namespace dg2d {
 namespace quadratures {
 
@@ -253,8 +255,6 @@ static double dunavant_rule_8[][4] = {
     { 0.728492392955404, 0.263112829634638, 0.008394777409958,  0.027230314174435 }
 };
 
-
-
 struct dunavant_rule {
     size_t num_points;
     double (*data)[4];
@@ -271,6 +271,91 @@ static struct dunavant_rule dunavant_rules[] = {
     { sizeof(dunavant_rule_8)/(sizeof(double)*4), dunavant_rule_8 },
     { 0, NULL }
 };
+
+void print_rule_details(void)
+{
+    for (size_t i = 0; i < 7; i++)
+    {
+        std::cout << "Rule " << i+1 << std::endl;
+        auto num_points = dunavant_rules[i].num_points;
+
+        double tot_w = 0;
+
+        for (size_t j = 0; j < num_points; j++)
+        {
+            auto l0 = dunavant_rules[i].data[j][0];
+            auto l1 = dunavant_rules[i].data[j][1];
+            auto l2 = dunavant_rules[i].data[j][2];
+            auto w = dunavant_rules[i].data[j][3];
+            tot_w += w;
+            std::cout << "Coord sum: " << l0 + l1 + l2 << std::endl;
+        }
+        std::cout << "Tot weight: " << tot_w << std::endl;
+    }
+}
+
+/* See Ern & Guermond - Theory and practice of FEM, pag 360. */
+template<typename T>
+std::vector<quadrature_point<T,2>>
+triangle_quadrature_low_order(const point<T,2>& p0,
+                              const point<T,2>& p1, 
+                              const point<T,2>& p2, size_t deg)
+{
+    std::vector<quadrature_point<T,2>>   ret;
+    auto v0 = p1 - p0;
+    auto v1 = p2 - p0;
+    auto area = std::abs( (v0.x() * v1.y() - v0.y() * v1.x())/2.0 );
+    point<T,2>      qp;
+    T               qw;
+    T               a1 = (6. - std::sqrt(15.)) / 21;
+    T               a2 = (6. + std::sqrt(15.)) / 21;
+    T               w1 = (155. - std::sqrt(15.)) / 1200;
+    T               w2 = (155. + std::sqrt(15.)) / 1200;
+    switch(deg)
+    {
+        case 0:
+        case 1:
+            qw = area;
+            qp = (p0 + p1 + p2)/3;      ret.push_back( make_qp(qp, qw) );
+            return ret;
+        case 2:
+            qw = area/3;
+            qp = p0/6 + p1/6 + 2*p2/3;  ret.push_back( make_qp(qp, qw) );
+            qp = p0/6 + 2*p1/3 + p2/6;  ret.push_back( make_qp(qp, qw) );
+            qp = 2*p0/3 + p1/6 + p2/6;  ret.push_back( make_qp(qp, qw) );
+            return ret;
+        case 3:
+            qw = 9*area/20;
+            qp = (p0 + p1 + p2)/3;      ret.push_back( make_qp(qp, qw) );
+            qw = 2*area/15;
+            qp = (p0 + p1)/2;           ret.push_back( make_qp(qp, qw) );
+            qp = (p0 + p2)/2;           ret.push_back( make_qp(qp, qw) );
+            qp = (p1 + p2)/2;           ret.push_back( make_qp(qp, qw) );
+            qw = area/20;
+            qp = p0;                    ret.push_back( make_qp(qp, qw) );
+            qp = p1;                    ret.push_back( make_qp(qp, qw) );
+            qp = p2;                    ret.push_back( make_qp(qp, qw) );
+            return ret;
+        case 4:
+        case 5:
+            qw = 9*area/40;
+            qp = (p0 + p1 + p2)/3;      ret.push_back( make_qp(qp, qw) );
+            qw = w1 * area;
+            qp = a1*p0 + a1*p1 + (1-2*a1)*p2;   ret.push_back( make_qp(qp, qw) );
+            qp = a1*p0 + (1-2*a1)*p1 + a1*p2;   ret.push_back( make_qp(qp, qw) );
+            qp = (1-2*a1)*p0 + a1*p1 + a1*p2;   ret.push_back( make_qp(qp, qw) );
+            qw = w2 * area;
+            qp = a2*p0 + a2*p1 + (1-2*a2)*p2;   ret.push_back( make_qp(qp, qw) );
+            qp = a2*p0 + (1-2*a2)*p1 + a2*p2;   ret.push_back( make_qp(qp, qw) );
+            qp = (1-2*a2)*p0 + a2*p1 + a2*p2;   ret.push_back( make_qp(qp, qw) );
+            return ret;
+            
+        default:
+            throw std::invalid_argument("Triangle quadrature: requested order too high");
+    }
+    return ret;
+}
+
 
 } // namespace detail
 
@@ -300,7 +385,7 @@ integrate(const Mesh& msh,
     return ret;
 }
 
-
+#ifdef USE_DUNAVANT
 template<typename T>
 std::vector<quadrature_point<T,2>>
 integrate(const simplicial_mesh<T>& msh,
@@ -335,7 +420,17 @@ integrate(const simplicial_mesh<T>& msh,
 
     return ret;
 }
-
+#else /* USE_DUNAVANT */
+template<typename T>
+std::vector<quadrature_point<T,2>>
+integrate(const simplicial_mesh<T>& msh,
+          const typename simplicial_mesh<T>::cell_type& cl,
+          size_t degree)
+{
+    auto pts = points(msh, cl);
+    return detail::triangle_quadrature_low_order(pts[0], pts[1], pts[2], degree);
+}
+#endif /* USE_DUNAVANT */
 
 /* Quadrature for cartesian quadrangles, it is just tensorized Gauss points. */
 template<typename T>
