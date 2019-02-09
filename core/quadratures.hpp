@@ -48,7 +48,7 @@
 #include "core/point.hpp"
 #include "core/mesh.hpp"
 
-#define USE_DUNAVANT
+//#define USE_DUNAVANT
 
 namespace dg2d {
 namespace quadratures {

@@ -142,6 +142,7 @@ struct dg_config
 template<typename Mesh>
 void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
 {
+#define DEBUG
     using mesh_type = Mesh;
     using T = typename mesh_type::coordinate_type;
 
@@ -158,18 +159,30 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
         return 2.0 * M_PI * M_PI * sx * sy;
     };
 
+#ifdef DEBUG
+    auto sol_fun = [](const typename mesh_type::point_type& pt) -> auto {
+        auto sx = std::sin(M_PI*pt.x());
+        auto sy = std::sin(M_PI*pt.y());
+
+        return pt.x();//sx * sy;
+    };
+#endif /* DEBUG */
+
     assembler<mesh_type> assm(msh, degree, cfg.use_preconditioner);
 
 
     std::ofstream ofs("basis.dat");
 
+    T c_err = 0.0;
+
     for (auto& tcl : msh.cells)
     {
-        auto qps = dg2d::quadratures::integrate(msh, tcl, 2*degree+3);
+        auto qps = dg2d::quadratures::integrate(msh, tcl, 2*degree+2);
         auto tbasis = dg2d::bases::make_basis(msh, tcl, degree);
 
         blaze::DynamicMatrix<T> K(tbasis.size(), tbasis.size(), 0.0);
         blaze::DynamicVector<T> loc_rhs(tbasis.size(), 0.0);
+
 
         for (auto& qp : qps)
         {
@@ -189,9 +202,10 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
         {
             blaze::DynamicMatrix<T> Att(tbasis.size(), tbasis.size(), 0.0);
             blaze::DynamicMatrix<T> Atn(tbasis.size(), tbasis.size(), 0.0);
-            //blaze::DynamicMatrix<T> Ant(tbasis.size(), tbasis.size(), 0.0);
-            //blaze::DynamicMatrix<T> Ann(tbasis.size(), tbasis.size(), 0.0);
-
+#ifdef DEBUG
+            blaze::DynamicMatrix<T> Ant(tbasis.size(), tbasis.size(), 0.0);
+            blaze::DynamicMatrix<T> Ann(tbasis.size(), tbasis.size(), 0.0);
+#endif /* DEBUG */
             auto nv = neighbour_via(msh, tcl, fc);
             auto ncl = nv.first;
             auto nbasis = dg2d::bases::make_basis(msh, ncl, degree);
@@ -199,7 +213,7 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
 
             auto n     = normal(msh, tcl, fc);
             auto eta_l = eta / diameter(msh, fc);
-            auto f_qps = dg2d::quadratures::integrate(msh, fc, 2*degree+3);
+            auto f_qps = dg2d::quadratures::integrate(msh, fc, 2*degree+2);
             
             for (auto& fqp : f_qps)
             {
@@ -221,22 +235,21 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
                     continue;
                 }
 
-                //diag += Att;
-
                 auto nphi   = nbasis.eval(ep);
                 auto ndphi  = nbasis.eval_grads(ep);
 
                 Atn  = - fqp.weight() * eta_l * tphi * trans(nphi);
                 Atn += - fqp.weight() * 0.5 * tphi * trans(ndphi*n);
                 Atn += + fqp.weight() * 0.5 * (tdphi*n) * trans(nphi); 
+#ifdef DEBUG
+                Ant  = - fqp.weight() * eta_l * nphi * trans(tphi);
+                Ant += + fqp.weight() * 0.5 * (ndphi*n) * trans(tphi);
+                Ant += - fqp.weight() * 0.5 * nphi * trans(tdphi*n);
 
-                //Ant  = - fqp.weight() * eta_l * nphi * trans(tphi);
-                //Ant += + fqp.weight() * 0.5 * (ndphi*n) * trans(tphi);
-                //Ant += - fqp.weight() * 0.5 * nphi * trans(tdphi*n);
-
-                //Ann  = + fqp.weight() * eta_l * nphi * trans(nphi);
-                //Ann += + fqp.weight() * 0.5 * (ndphi*n) * trans(nphi);
-                //Ann += + fqp.weight() * 0.5 * nphi * trans(ndphi*n);
+                Ann  = + fqp.weight() * eta_l * nphi * trans(nphi);
+                Ann += + fqp.weight() * 0.5 * (ndphi*n) * trans(nphi);
+                Ann += + fqp.weight() * 0.5 * nphi * trans(ndphi*n);
+#endif /* DEBUG */
             }
 
             assm.assemble(msh, tcl, tcl, Att);
@@ -245,18 +258,45 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
                 assm.assemble(msh, tcl, ncl, Atn);
                 //assm.assemble(msh, ncl, tcl, Ant);
                 //assm.assemble(msh, ncl, ncl, Ann);
+            
+#ifdef DEBUG
+                blaze::DynamicMatrix<T> Mt(tbasis.size(), tbasis.size(), 0.0);
+                blaze::DynamicMatrix<T> Mn(tbasis.size(), tbasis.size(), 0.0);
+                blaze::DynamicVector<T> loc_rhs_t(tbasis.size(), 0.0);
+                blaze::DynamicVector<T> loc_rhs_n(tbasis.size(), 0.0);
+
+                for (auto& qp : qps)
+                {
+                    auto ep   = qp.point();
+                    auto tphi  = tbasis.eval(ep);
+                    auto nphi  = nbasis.eval(ep);
+
+                    Mt += qp.weight() * tphi * trans(tphi);
+                    Mn += qp.weight() * nphi * trans(tphi);
+
+                    loc_rhs_t += qp.weight() * sol_fun(ep) * tphi;
+                    loc_rhs_n += qp.weight() * sol_fun(ep) * nphi;
+                }
+
+                blaze::DynamicVector<T> t_proj = inv(Mt)*loc_rhs_t;
+                blaze::DynamicVector<T> n_proj = inv(Mn)*loc_rhs_n;
+
+                blaze::DynamicVector<T> res_t = Att*t_proj + Atn*n_proj;
+                blaze::DynamicVector<T> res_n = Ant*t_proj + Ann*n_proj;
+
+                std::cout << fc << ": " << dot(t_proj, res_t) + dot(n_proj,res_n) << std::endl;
+
+#endif /* DEBUG */
             }
         }
-
-        //for(size_t i = 0; i < 3; i++)
-        //{
-        //    assert( std::abs(diag(i,i)) > 1e-10 );
-        //}
-
-        //std::cout << diag << std::endl;
     }
 
     assm.finalize();
+
+#ifdef DEBUG
+    std::cout << c_err << std::endl;
+#endif /* DEBUG */
+
 
     blaze::DynamicVector<T> sol(assm.system_size());
 
@@ -282,10 +322,11 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
     {
         var[i] = sol[bs*i];
     }
-
+#ifndef DEBUG
     auto sol_fun = [](const typename mesh_type::point_type& pt) -> auto {
         return std::sin(M_PI*pt.x()) * std::sin(M_PI*pt.y());
     };
+#endif
 
     auto sol_grad = [](const typename mesh_type::point_type& pt) -> auto {
         blaze::StaticVector<T,2> grad(0.0);
@@ -308,13 +349,13 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
         blaze::DynamicMatrix<T> M(basis_size, basis_size, 0.0);
         blaze::DynamicVector<T> a(basis_size, 0.0);
 
-        auto qps = dg2d::quadratures::integrate(msh, cl, 2*degree+3);
+        auto qps = dg2d::quadratures::integrate(msh, cl, 2*degree);
         for (auto& qp : qps)
         {
             auto ep   = qp.point();
             auto phi  = basis.eval(ep);
 
-            auto val = dot(loc_sol, phi);
+            T val = dot(loc_sol, phi);
             L2_errsq += qp.weight() * (sol_fun(ep) - val) * (sol_fun(ep) - val);
         }
     }
