@@ -133,7 +133,7 @@ struct dg_config
     bool    shatter;
 
     dg_config()
-        : eta(0.0), degree(1), ref_levels(4), use_preconditioner(false)
+        : eta(1.0), degree(1), ref_levels(4), use_preconditioner(false)
     {}
 };
 
@@ -150,23 +150,29 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
     msh.compute_connectivity();
 
     size_t degree = cfg.degree;
-    T eta = 3;//2*degree*degree;
+    T eta = 3*degree*degree*cfg.eta;
 
     auto rhs_fun = [](const typename mesh_type::point_type& pt) -> auto {
         auto sx = std::sin(M_PI*pt.x());
         auto sy = std::sin(M_PI*pt.y());
 
         return 2.0 * M_PI * M_PI * sx * sy;
+
+        //return pt.y() * pt.y();
     };
 
-#ifdef DEBUG
+    auto bc_d = [](const typename mesh_type::point_type& pt) -> auto {
+        return 0.0;
+    };
+
     auto sol_fun = [](const typename mesh_type::point_type& pt) -> auto {
         auto sx = std::sin(M_PI*pt.x());
         auto sy = std::sin(M_PI*pt.y());
 
-        return pt.x() * pt.x();//sx * sy;
+        return sx * sy;
+
+        //return 2.0;
     };
-#endif /* DEBUG */
 
     assembler<mesh_type> assm(msh, degree, cfg.use_preconditioner);
 
@@ -178,14 +184,13 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
     for (auto& tcl : msh.cells)
     {
 #ifdef DEBUG
-    	std::cout << tcl << std::endl;
+        std::cout << tcl << std::endl;
 #endif /* DEBUG */
         auto qps = dg2d::quadratures::integrate(msh, tcl, 2*degree);
         auto tbasis = dg2d::bases::make_basis(msh, tcl, degree);
 
         blaze::DynamicMatrix<T> K(tbasis.size(), tbasis.size(), 0.0);
         blaze::DynamicVector<T> loc_rhs(tbasis.size(), 0.0);
-
 
         for (auto& qp : qps)
         {
@@ -197,9 +202,6 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
             loc_rhs += qp.weight() * rhs_fun(ep) * phi;
         }
 
-        assm.assemble(msh, tcl, K, loc_rhs);
-
-        //blaze::DynamicMatrix<T> diag = K;
         auto fcs = faces(msh, tcl);
         for (auto& fc : fcs)
         {
@@ -227,30 +229,33 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
 
                 if (nv.second)
                 {
-                    Att  = + fqp.weight() * eta_l * tphi * trans(tphi);
+                    Att += + fqp.weight() * eta_l * tphi * trans(tphi);
                     Att += - fqp.weight() * 0.5 * tphi * trans(tdphi*n);
                     Att += - fqp.weight() * 0.5 * (tdphi*n) * trans(tphi);
                 }
                 else
                 {
-                    Att  = + fqp.weight() * eta_l * tphi * trans(tphi);
-                    Att += - fqp.weight() * 1 * tphi * trans(tdphi*n);
-                    Att += - fqp.weight() * 1 * (tdphi*n) * trans(tphi);
+                    Att += + fqp.weight() * eta_l * tphi * trans(tphi);
+                    Att += - fqp.weight() * tphi * trans(tdphi*n);
+                    Att += - fqp.weight() * (tdphi*n) * trans(tphi);
+                    
+                    loc_rhs -= fqp.weight() * bc_d(ep) * (tdphi*n);
+                    loc_rhs += fqp.weight() * eta_l * bc_d(ep) * tphi;
                     continue;
                 }
 
                 auto nphi   = nbasis.eval(ep);
                 auto ndphi  = nbasis.eval_grads(ep);
 
-                Atn  = - fqp.weight() * eta_l * tphi * trans(nphi);
+                Atn += - fqp.weight() * eta_l * tphi * trans(nphi);
                 Atn += - fqp.weight() * 0.5 * tphi * trans(ndphi*n);
                 Atn += + fqp.weight() * 0.5 * (tdphi*n) * trans(nphi); 
 #ifdef DEBUG
-                Ant  = - fqp.weight() * eta_l * nphi * trans(tphi);
+                Ant += - fqp.weight() * eta_l * nphi * trans(tphi);
                 Ant += + fqp.weight() * 0.5 * nphi * trans(tdphi*n);
                 Ant += - fqp.weight() * 0.5 * (ndphi*n) * trans(tphi);
 
-                Ann  = + fqp.weight() * eta_l * nphi * trans(nphi);
+                Ann += + fqp.weight() * eta_l * nphi * trans(nphi);
                 Ann += + fqp.weight() * 0.5 * nphi * trans(ndphi*n);
                 Ann += + fqp.weight() * 0.5 * (ndphi*n) * trans(nphi);
 #endif /* DEBUG */
@@ -282,8 +287,8 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
                     loc_rhs_n += qp.weight() * sol_fun(ep) * nphi;
                 }
 
-                blaze::DynamicVector<T> t_proj = inv(Mt)*loc_rhs_t;
-                blaze::DynamicVector<T> n_proj = inv(Mn)*loc_rhs_n;
+                blaze::DynamicVector<T> t_proj = blaze::solve_LU(Mt, loc_rhs_t);
+                blaze::DynamicVector<T> n_proj = blaze::solve_LU(Mn, loc_rhs_n);
 
                 //std::cout << "projections" << std::endl;
                 //std::cout << t_proj << std::endl;
@@ -324,6 +329,7 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
 #endif /* DEBUG */
             }
         }
+        assm.assemble(msh, tcl, K, loc_rhs);
     }
 
     assm.finalize();
@@ -339,18 +345,18 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
     conjugated_gradient_params<T> cgp;
     cgp.verbose = true;
     cgp.rr_max = 10000;
-    cgp.rr_tol = 1e-12;
+    cgp.rr_tol = 1e-8;
     cgp.max_iter = 2*assm.system_size();
 
-    //if (cfg.use_preconditioner)
-    //    conjugated_gradient(cgp, assm.lhs, assm.rhs, sol, assm.pc);
-    //else
-    //    conjugated_gradient(cgp, assm.lhs, assm.rhs, sol);
+    if (cfg.use_preconditioner)
+        conjugated_gradient(cgp, assm.lhs, assm.rhs, sol, assm.pc);
+    else
+        conjugated_gradient(cgp, assm.lhs, assm.rhs, sol);
 
     //qmr(assm.lhs, assm.rhs, sol);
 
-    blaze::DynamicMatrix<T> A(assm.lhs);
-    sol = inv(A)*assm.rhs;
+    //blaze::DynamicMatrix<T> A(assm.lhs);
+    //sol = blaze::solve_LU(A, assm.rhs);
 
     blaze::DynamicVector<T> var(msh.cells.size());
     auto bs = dg2d::bases::scalar_basis_size(degree, 2);
@@ -358,11 +364,11 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
     {
         var[i] = sol[bs*i];
     }
-#ifndef DEBUG
+
+/*
     auto sol_fun = [](const typename mesh_type::point_type& pt) -> auto {
         return std::sin(M_PI*pt.x()) * std::sin(M_PI*pt.y());
     };
-#endif
 
     auto sol_grad = [](const typename mesh_type::point_type& pt) -> auto {
         blaze::StaticVector<T,2> grad(0.0);
@@ -370,8 +376,9 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
         grad[1] = M_PI * std::sin(M_PI*pt.x()) * std::cos(M_PI*pt.y());
         return grad;
     };
-
-    T L2_errsq = 0.0;
+*/
+    T L2_errsq_qp = 0.0;
+    T L2_errsq_mm = 0.0;
     for (auto& cl : msh.cells)
     {
         auto basis = dg2d::bases::make_basis(msh, cl, degree);
@@ -391,12 +398,20 @@ void run_dg(Mesh& msh, const dg_config<typename Mesh::coordinate_type>& cfg)
             auto ep   = qp.point();
             auto phi  = basis.eval(ep);
 
+            M += qp.weight() * phi * trans(phi);
+            a += qp.weight() * sol_fun(ep) * phi;
+
             T val = dot(loc_sol, phi);
-            L2_errsq += qp.weight() * (sol_fun(ep) - val) * (sol_fun(ep) - val);
+            L2_errsq_qp += qp.weight() * (sol_fun(ep) - val) * (sol_fun(ep) - val);
         }
+
+        blaze::DynamicVector<T> proj = blaze::solve_LU(M, a);
+        L2_errsq_mm += dot(proj-loc_sol, M*(proj-loc_sol));
+
     }
 
-    std::cout << "L2-norm error: " << std::sqrt(L2_errsq) << std::endl;
+    std::cout << "L2-norm error (qp): " << std::sqrt(L2_errsq_qp) << std::endl;
+    std::cout << "L2-norm error (mm): " << std::sqrt(L2_errsq_mm) << std::endl;
 
 #ifdef WITH_SILO
     dg2d::silo_database silo;
