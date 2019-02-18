@@ -64,7 +64,7 @@ struct edge
     friend std::ostream& operator<<(std::ostream& os, const edge& e) {
         os << "Edge: " << e.p0 << " " << e.p1;
         if (e.is_broken) os << ", broken";
-        if (e.is_boundary) os << ", boundary";
+        if (e.is_boundary) os << ", boundary " << e.boundary_id;
         return os;
     }
 
@@ -440,6 +440,20 @@ diameter(const Mesh& msh, const Element& elem)
     for (size_t i = 0; i < pts.size(); i++)
         for (size_t j = i+1; j < pts.size(); j++)
             diam = std::max( distance(pts[i], pts[j]), diam );
+
+    return diam;
+}
+
+template<typename Mesh>
+typename Mesh::coordinate_type
+diameter(const Mesh& msh)
+{
+    typename Mesh::coordinate_type  diam = 0.0;
+
+    for (auto& cl : msh.cells)
+        diam += diameter(msh, cl);
+
+    diam /= msh.cells.size();
 
     return diam;
 }

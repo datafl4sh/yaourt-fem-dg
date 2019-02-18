@@ -11,6 +11,7 @@ struct conjugated_gradient_params
     bool            verbose;
     bool            save_iteration_history;
     bool            use_initial_guess;
+    bool            use_normal_eqns;
     std::string     history_filename;
 
     conjugated_gradient_params() : rr_tol(1e-8),
@@ -18,7 +19,8 @@ struct conjugated_gradient_params
                                    max_iter(100),
                                    verbose(false),
                                    save_iteration_history(false),
-                                   use_initial_guess(false) {}
+                                   use_initial_guess(false),
+                                   use_normal_eqns(false) {}
 };
 
 // TODO: return false and some kind of error in case of non convergence.
@@ -64,7 +66,11 @@ conjugated_gradient(const conjugated_gradient_params<T>& cgp,
 
     blaze::DynamicVector<T> d(N), r(N), r0(N), y(N);
 
-    r0 = d = r = b - A*x;
+    if (cgp.use_normal_eqns)
+        r0 = d = r = trans(A)*(b - A*x);
+    else
+        r0 = d = r = b - A*x;
+
     nr = nr0 = norm(r);
 
     std::ofstream iter_hist_ofs;
@@ -84,13 +90,120 @@ conjugated_gradient(const conjugated_gradient_params<T>& cgp,
         if (cgp.save_iteration_history)
             iter_hist_ofs << nr/nr0 << std::endl;
 
-        y = A*d;
+        if (cgp.use_normal_eqns)
+            y = trans(A)*A*d;
+        else
+            y = A*d;
+
         rho = dot(r,r);
         alpha = rho/dot(d,y);
         x = x + alpha * d;
         r = r - alpha * y;
         beta = dot(r,r)/rho;
         d = r + beta * d;
+
+        nr = norm(r);
+        iter++;
+    }
+
+    if (cgp.save_iteration_history)
+    {
+        iter_hist_ofs << nr/nr0 << std::endl;
+        iter_hist_ofs.close();
+    }
+
+    if (cgp.verbose)
+        std::cout << " -> Iteration " << iter << ", rr = " << nr/nr0 << std::endl;
+
+    return true;
+}
+
+// TODO: return false and some kind of error in case of non convergence.
+template<typename T>
+bool
+bicgstab(const conjugated_gradient_params<T>& cgp,
+         const blaze::CompressedMatrix<T>& A,
+         const blaze::DynamicVector<T>& b,
+         blaze::DynamicVector<T>& x)
+{
+    if ( A.rows() != A.columns() )
+    {
+        if (cgp.verbose)
+            std::cout << "[CG solver] A square matrix is required" << std::endl;
+
+        return false;
+    }
+
+    size_t N = A.columns();
+
+    if (b.size() != N)
+    {
+        if (cgp.verbose)
+            std::cout << "[CG solver] Wrong size of RHS vector" << std::endl;
+
+        return false;
+    }
+
+    if (x.size() != N)
+    {
+        if (cgp.verbose)
+            std::cout << "[CG solver] Wrong size of solution vector" << std::endl;
+
+        return false;
+    }
+
+    if (!cgp.use_initial_guess)
+        x = blaze::DynamicVector<T>(N, 0.0);
+
+    size_t  iter = 0;
+    T       nr, nr0;
+    T       alpha = 1.0, omega = 1.0, rho = 1.0;
+
+    blaze::DynamicVector<T> r(N), r0(N), p(N, 0.0), v(N, 0.0);
+    blaze::DynamicVector<T> s(N), t(N);
+
+    r0 = r = b - A*x;
+    nr = nr0 = norm(r);
+
+    std::ofstream iter_hist_ofs;
+    if (cgp.save_iteration_history)
+        iter_hist_ofs.open(cgp.history_filename);
+
+    while ( nr/nr0 > cgp.rr_tol && iter < cgp.max_iter && nr/nr0 < cgp.rr_max )
+    {
+        if ( cgp.verbose )
+        {
+            std::cout << "                                                 \r";
+            std::cout << " -> Iteration " << iter << ", rr = ";
+            std::cout << nr/nr0 << "\b\r";
+            std::cout.flush();
+        }
+
+        if (cgp.save_iteration_history)
+            iter_hist_ofs << nr/nr0 << std::endl;
+
+        T rho_old = rho;
+
+        rho = dot(r,r0);
+        if ( std::abs(rho) < 1e-9 )
+        {
+            r = b - A*x;
+            r0 = r;
+            rho = dot(r,r0);
+        }
+
+        T beta = (rho/rho_old)*(alpha/omega);
+        p = r + beta * (p - omega*v);
+        v = A*p;
+        alpha = rho / dot(v, r0);
+        s = r - alpha*v;
+        t = A*s;
+
+        //T nt = dot(t,t);
+        omega = dot(t,s)/dot(t,t);
+
+        x = x + alpha * p + omega * s;
+        r = s - omega*t;
 
         nr = norm(r);
         iter++;
@@ -198,6 +311,111 @@ conjugated_gradient(const conjugated_gradient_params<T>& cgp,
     return true;
 }
 
+template<typename T>
+bool
+bicgstab(const conjugated_gradient_params<T>& cgp,
+         const blaze::CompressedMatrix<T>& A,
+         const blaze::DynamicVector<T>& b,
+         blaze::DynamicVector<T>& x,
+         const blaze::CompressedMatrix<T>& iM)
+{
+    if ( A.rows() != A.columns() )
+    {
+        if (cgp.verbose)
+            std::cout << "[CG solver] A square matrix is required" << std::endl;
+
+        return false;
+    }
+
+    size_t N = A.columns();
+
+    if (b.size() != N)
+    {
+        if (cgp.verbose)
+            std::cout << "[CG solver] Wrong size of RHS vector" << std::endl;
+
+        return false;
+    }
+
+    if (x.size() != N)
+    {
+        if (cgp.verbose)
+            std::cout << "[CG solver] Wrong size of solution vector" << std::endl;
+
+        return false;
+    }
+
+    if (!cgp.use_initial_guess)
+        x = blaze::DynamicVector<T>(N, 0.0);
+
+    size_t  iter = 0;
+    T       nr, nr0;
+    T       alpha = 1.0, omega = 1.0, rho = 1.0;
+
+    blaze::DynamicVector<T> r(N), r0(N), p(N, 0.0), v(N, 0.0);
+    blaze::DynamicVector<T> s(N), t(N);
+    blaze::DynamicVector<T> y(N), z(N);
+
+    r0 = r = b - A*x;
+    nr = nr0 = norm(r);
+
+    std::ofstream iter_hist_ofs;
+    if (cgp.save_iteration_history)
+        iter_hist_ofs.open(cgp.history_filename);
+
+    while ( nr/nr0 > cgp.rr_tol && iter < cgp.max_iter && nr/nr0 < cgp.rr_max )
+    {
+        if ( cgp.verbose )
+        {
+            std::cout << "                                                 \r";
+            std::cout << " -> Iteration " << iter << ", rr = ";
+            std::cout << nr/nr0 << "\b\r";
+            std::cout.flush();
+        }
+
+        if (cgp.save_iteration_history)
+            iter_hist_ofs << nr/nr0 << std::endl;
+
+        T rho_old = rho;
+
+        rho = dot(r,r0);
+        if ( std::abs(rho) < 1e-9 )
+        {
+            r = b - A*x;
+            r0 = r;
+            rho = dot(r,r0);
+        }
+
+        T beta = (rho/rho_old)*(alpha/omega);
+        p = r + beta * (p - omega*v);
+        y = iM*p;
+        v = A*y;
+        alpha = rho / dot(v, r0);
+        s = r - alpha*v;
+        z = iM*s;
+        t = A*z;
+
+        auto iMt = iM*t;
+        omega = dot(iMt,z)/dot(iMt,iMt);
+
+        x = x + alpha * y + omega * z;
+        r = s - omega*t;
+
+        nr = norm(r);
+        iter++;
+    }
+
+    if (cgp.save_iteration_history)
+    {
+        iter_hist_ofs << nr/nr0 << std::endl;
+        iter_hist_ofs.close();
+    }
+
+    if (cgp.verbose)
+        std::cout << " -> Iteration " << iter << ", rr = " << nr/nr0 << std::endl;
+
+    return true;
+}
 template<typename T>
 bool
 qmr(const blaze::CompressedMatrix<T>& A,
