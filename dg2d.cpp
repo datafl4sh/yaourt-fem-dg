@@ -152,12 +152,12 @@ struct dg_config
     int             ref_levels;
     bool            use_preconditioner;
     bool            shatter;
-    solver_type     solver;
+    bool            ar_use_upwinding;
 
 
     dg_config()
         : eta(1.0), degree(1), ref_levels(4), use_preconditioner(false),
-          solver(solver_type::BICGSTAB)
+          ar_use_upwinding(false)
     {}
 };
 
@@ -256,7 +256,10 @@ struct solver_status
 template<typename T>
 std::ostream& operator<<(std::ostream& os, const solver_status<T>& s)
 {
-    os << s.mesh_h << " " << s.L2_errsq_qp << " " << s.L2_errsq_mm;
+    os << "Convergence results: " << std::endl;
+    os << "  mesh size (h):         " << s.mesh_h << std::endl;
+    os << "  L2-norm error (qp):    " << std::sqrt(s.L2_errsq_qp) << std::endl;
+    os << "  L2-norm error (mm):    " << std::sqrt(s.L2_errsq_mm);
     return os;
 }
 
@@ -365,10 +368,14 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
     conjugated_gradient(cgp, assm.lhs, assm.rhs, sol);
 
     /* POSTPROCESS PART */
+
+    std::ofstream gnuplot_output("diffusion_solution.txt");
+
     status.L2_errsq_qp = 0.0;
     status.L2_errsq_mm = 0.0;
     for (auto& cl : msh.cells)
     {
+
         auto basis = dg2d::bases::make_basis(msh, cl, degree);
         auto basis_size = basis.size();
         auto ofs = offset(msh, cl);
@@ -376,6 +383,15 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
         blaze::DynamicVector<T> loc_sol(basis_size);
         for (size_t i = 0; i < basis_size; i++)
             loc_sol[i] = sol[basis_size * ofs + i];
+
+        auto tps = dg2d::make_test_points(msh, cl, 6);
+        for (auto& tp : tps)
+        {
+            auto phi = basis.eval(tp);
+            T sval = dot(loc_sol, phi);
+
+            gnuplot_output << tp.x() << " " << tp.y() << " " << sval << std::endl;
+        }
 
         blaze::DynamicMatrix<T> M(basis_size, basis_size, 0.0);
         blaze::DynamicVector<T> a(basis_size, 0.0);
@@ -458,6 +474,8 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
 
     size_t degree = cfg.degree;
 
+    size_t eta = 5;
+
     assembler<mesh_type> assm(msh, degree, cfg.use_preconditioner);
     for (auto& tcl : msh.cells)
     {
@@ -501,22 +519,24 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
                 auto tphi   = tbasis.eval(ep);
                 auto tdphi  = tbasis.eval_grads(ep);
 
+                T beta_nf = dot(params::beta(ep), n);
+                T fi_coeff;
+
+                if (cfg.ar_use_upwinding)
+                    fi_coeff = beta_nf;
+                else
+                    fi_coeff = beta_nf - eta * std::abs(beta_nf);
+
                 if (nv.second)
                 {   /* NOT on a boundary */
-                    /* Advection-Reaction */
-                    T beta_nf = dot(params::beta(ep), n);
-                    auto coeff = beta_nf;// - eta*beta_nf/2.0;
-                    Att += - fqp.weight() * 0.5*coeff * tphi * trans(tphi);
+                    Att += - fqp.weight() * 0.5 * fi_coeff * tphi * trans(tphi);
                 }
                 else
                 {   /* On a boundary*/
-                    T beta_nf = dot(params::beta(ep), n);
                     auto beta_minus = 0.5*(std::abs(beta_nf) - beta_nf);
 
                     if (beta_nf < 0.0)
-                    {
                         Att += fqp.weight() * beta_minus * tphi * trans(tphi);
-                    }
 
                     continue;
                 }
@@ -525,9 +545,7 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
                 auto ndphi  = nbasis.eval_grads(ep);
 
                 /* Advection-Reaction */
-                auto beta_nf = dot(params::beta(ep),n);
-                auto coeff = beta_nf;// - eta*beta_nf/2.0;
-                Atn += + fqp.weight() * coeff * 0.5 * tphi * trans(nphi);
+                Atn += + fqp.weight() * fi_coeff * 0.5 * tphi * trans(nphi);
             }
 
             assm.assemble(msh, tcl, tcl, Att);
@@ -550,7 +568,12 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
     cgp.max_iter = 2*assm.system_size();
     cgp.use_normal_eqns = true; /* PAY ATTENTION TO THIS */
 
-    conjugated_gradient(cgp, assm.lhs, assm.rhs, sol);
+    if (cfg.use_preconditioner)
+        conjugated_gradient(cgp, assm.lhs, assm.rhs, sol, assm.pc);
+    else
+        conjugated_gradient(cgp, assm.lhs, assm.rhs, sol);
+
+    std::ofstream gnuplot_output("advection_reaction_solution.txt");
 
     status.L2_errsq_qp = 0.0;
     status.L2_errsq_mm = 0.0;
@@ -563,6 +586,15 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
         blaze::DynamicVector<T> loc_sol(basis_size);
         for (size_t i = 0; i < basis_size; i++)
             loc_sol[i] = sol[basis_size * ofs + i];
+
+        auto tps = dg2d::make_test_points(msh, cl, 6);
+        for (auto& tp : tps)
+        {
+            auto phi = basis.eval(tp);
+            T sval = dot(loc_sol, phi);
+
+            gnuplot_output << tp.x() << " " << tp.y() << " " << sval << std::endl;
+        }
 
         blaze::DynamicMatrix<T> M(basis_size, basis_size, 0.0);
         blaze::DynamicVector<T> a(basis_size, 0.0);
@@ -627,35 +659,45 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
     return status;
 }
 
-template<typename T>
-void run_triangle_dg(const dg_config<T>& cfg)
+enum class dg_problem
 {
-    using mesh_type = dg2d::simplicial_mesh<T>;
+    DIFFUSION,
+    ADVECTION_REACTION
+};
+
+template<typename Mesh>
+void run_dg(const dg_config<typename Mesh::coordinate_type>& cfg,
+            dg_problem problem)
+{
+    using mesh_type = Mesh;
+    using T = typename Mesh::coordinate_type;
 
     mesh_type msh;
+
     auto mesher = dg2d::get_mesher(msh);
     mesher.create_mesh(msh, cfg.ref_levels);
 
     if (cfg.shatter)
         shatter_mesh(msh, 0.2);
 
-    auto status = run_advection_reaction_solver(msh, cfg);
-    std::cout << status << std::endl;
-}
+    solver_status<T> status;
 
-template<typename T>
-void run_quadrangle_dg(const dg_config<T>& cfg)
-{
-    using mesh_type = dg2d::quad_mesh<T>;
+    switch (problem)
+    {
+        case dg_problem::DIFFUSION:
+            std::cout << "Running dG diffusion solver" << std::endl;
+            std::cout << "  degree: " << cfg.degree << std::endl;
+            status = run_diffusion_solver(msh, cfg);
+            std::cout << status << std::endl;
+            break;
 
-    mesh_type msh;
-    auto mesher = dg2d::get_mesher(msh);
-    mesher.create_mesh(msh, cfg.ref_levels);
-
-    if (cfg.shatter)
-        shatter_mesh(msh, 0.2);
-
-    run_advection_reaction_solver(msh, cfg);
+        case dg_problem::ADVECTION_REACTION:
+            std::cout << "Running dG advection-reaction solver" << std::endl;
+            std::cout << "  degree: " << cfg.degree << std::endl;
+            status = run_advection_reaction_solver(msh, cfg);
+            std::cout << status << std::endl;
+            break;
+    }
 }
 
 enum class meshtype  {
@@ -671,7 +713,8 @@ int main(int argc, char **argv)
 
     using T = double;
 
-    meshtype mt = meshtype::TRIANGULAR;
+    meshtype    mt = meshtype::TRIANGULAR;
+    dg_problem  dp = dg_problem::DIFFUSION;
 
     dg_config<T> cfg;
 
@@ -679,7 +722,7 @@ int main(int argc, char **argv)
 
     cfg.shatter = false;
 
-    while ( (ch = getopt(argc, argv, "e:k:r:hqsvpS")) != -1 )
+    while ( (ch = getopt(argc, argv, "e:k:r:m:P:hpuS")) != -1 )
     {
         switch(ch)
         {
@@ -689,31 +732,26 @@ int main(int argc, char **argv)
 
             case 'k':
                 cfg.degree = atoi(optarg);
-                if (cfg.degree < 1)
-                {
-                    std::cout << "Degree must be positive. Falling back to 1." << std::endl;
-                    cfg.degree = 1;
-                }
                 break;
 
             case 'r':
                 cfg.ref_levels = atoi(optarg);
                 if (cfg.ref_levels < 0)
-                {
-                    std::cout << "Degree must be positive. Falling back to 1." << std::endl;
                     cfg.ref_levels = 1;
-                }
                 break;
 
-            case 'v':
+            case 'm':
+                if ( strcmp(optarg, "tri") == 0 )
+                    mt = meshtype::TRIANGULAR;
+                else if ( strcmp(optarg, "quad") == 0 )
+                    mt = meshtype::QUADRANGULAR;
                 break;
 
-            case 'q':
-                mt = meshtype::QUADRANGULAR;
-                break;
-
-            case 's':
-                mt = meshtype::TRIANGULAR;
+            case 'P':
+                if ( strcmp(optarg, "diffusion") == 0 )
+                    dp = dg_problem::DIFFUSION;
+                else if ( strcmp(optarg, "adv-re") == 0 )
+                    dp = dg_problem::ADVECTION_REACTION;
                 break;
 
             case 'p':
@@ -722,6 +760,10 @@ int main(int argc, char **argv)
 
             case 'S':
                 cfg.shatter = true;
+                break;
+
+            case 'u':
+                cfg.ar_use_upwinding = true;
                 break;
 
             case 'h':
@@ -739,11 +781,11 @@ int main(int argc, char **argv)
     switch (mt)
     {
         case meshtype::TRIANGULAR:
-            run_triangle_dg(cfg);
+            run_dg< dg2d::simplicial_mesh<T> >(cfg, dp);
             break;
 
         case meshtype::QUADRANGULAR:
-            run_quadrangle_dg(cfg);
+            run_dg< dg2d::quad_mesh<T> >(cfg, dp);
             break;
 
         case meshtype::TETRAHEDRAL:

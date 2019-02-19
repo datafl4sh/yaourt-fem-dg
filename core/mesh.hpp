@@ -536,11 +536,46 @@ void shatter_mesh(Mesh& msh, typename Mesh::coordinate_type shatter_factor)
 }
 
 
-enum class boundary_condition {
-    NONE,
-    DIRICHLET,
-    NEUMANN,
-    ROBIN
-};
+
+template<typename T>
+std::vector<point<T,2>>
+make_test_points(const simplicial_mesh<T>& msh,
+                 const typename simplicial_mesh<T>::cell_type& cl,
+                 size_t levels)
+{
+    std::vector<point<T,2>> test_points;
+    auto pts = points(msh, cl);
+
+    levels += 1;
+    auto d0 = (pts[1] - pts[0]) / levels;
+    auto d1 = (pts[2] - pts[0]) / levels;
+
+    test_points.push_back( pts[0] );
+    for (size_t i = 1; i <= levels; i++)
+    {
+        auto p0 = pts[0] + (i * d0);
+        auto p1 = pts[0] + (i * d1);
+
+        auto d2 = (p0 - p1) / i;
+
+        for (size_t j = 0; j <= i; j++)
+            test_points.push_back( p1 + j * d2 );
+    }
+
+    return test_points;
+}
+
+
+template<typename T>
+std::vector<point<T,2>>
+make_test_points(const quad_mesh<T>& msh,
+                 const typename quad_mesh<T>::cell_type& cl,
+                 size_t levels)
+{
+    std::vector<point<T,2>> test_points;
+
+    return test_points;
+}
+
 
 } //namespace dg2d
