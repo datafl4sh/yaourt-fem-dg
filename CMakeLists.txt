@@ -44,9 +44,12 @@ target_link_libraries(continuous_fem ${LINK_LIBS})
 add_executable(test_quad test_quad.cpp)
 target_link_libraries(test_quad ${LINK_LIBS})
 
-add_executable(quadrature quadrature.cpp)
-target_link_libraries(quadrature ${LINK_LIBS})
+add_executable(ex1_geometry ex1_geometry.cpp)
+target_link_libraries(ex1_geometry ${LINK_LIBS})
 
-add_executable(projection projection.cpp)
-target_link_libraries(projection ${LINK_LIBS})
+add_executable(ex2_quadrature ex2_quadrature.cpp)
+target_link_libraries(ex2_quadrature ${LINK_LIBS})
+
+add_executable(ex3_projection ex3_projection.cpp)
+target_link_libraries(ex3_projection ${LINK_LIBS})
 

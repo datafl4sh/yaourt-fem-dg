@@ -27,7 +27,6 @@
 #include "core/meshers.hpp"
 #include "core/dataio.hpp"
 #include "core/solvers.hpp"
-#include "method_cfem/cfem.hpp"
 
 int main(int argc, char **argv)
 {

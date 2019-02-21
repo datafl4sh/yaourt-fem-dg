@@ -573,6 +573,23 @@ make_test_points(const quad_mesh<T>& msh,
                  size_t levels)
 {
     std::vector<point<T,2>> test_points;
+    auto pts = points(msh, cl);
+    levels += 1;
+
+    auto d0 = (pts[1] - pts[0])/levels;
+    auto d1 = (pts[2] - pts[1])/levels;
+    auto d2 = (pts[2] - pts[3])/levels;
+    auto d3 = (pts[3] - pts[0])/levels;
+
+    for (size_t i = 0; i <= levels; i++)
+    {
+        auto dh = ((pts[1] + d1*i) - (pts[0] + d3*i))/levels;
+        for (size_t j = 0; j <= levels; j++)
+        {
+            auto dv = ((pts[3] + d2*j) - (pts[0] + d0*j))/levels;
+            test_points.push_back( pts[0] + dh*j + dv*i );
+        }
+    }
 
     return test_points;
 }
