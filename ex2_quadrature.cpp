@@ -16,7 +16,7 @@
  * on [0,1]^2 of the monomials 'x^m y^n'. Remember to use the right order for
  * the quadrature. Compare the results with the analytical value, which is
  *
- *
+ *                          1./((m+1)*(n+1))
  * 
  */
 

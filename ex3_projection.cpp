@@ -1,4 +1,4 @@
-/* Exercise number 2 - Using quadratures & bases
+/* Exercise number 3 - Using quadratures & bases
  *
  * In this exercise we will solve the problem (u,v) = (f,v) on each mesh cell,
  * in order to project a function in a polynomial space. What this code does is
@@ -105,6 +105,12 @@ int main(int argc, char **argv)
             proj[cl_num*basis_size + i] = sol[i];
     }
 
+    /* Hints:
+     *  - Fill 'sol' with the appropriate values of 'proj'
+     *  - Once 'sol' is filled, you can use 'dot(sol, phi)' to get the
+     *    value of the solution at your quadrature point
+     *  - Remember to use a quadrature of degree 2k+2
+     */
     
     T L2_errsq = 0.0;
     for (auto& cl : msh.cells)
@@ -131,3 +137,4 @@ int main(int argc, char **argv)
 
     return 0;
 }
+
