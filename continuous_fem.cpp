@@ -1,4 +1,7 @@
 /*
+ * Yaourt-FEM-DG - Yet AnOther Useful Resource for Teaching FEM and DG.
+ *
+ * Matteo Cicuttin (C) 2019
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -12,10 +15,6 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- * Toy implememtation of Discontinuous Galerkin for teaching purposes
- *
- * Matteo Cicuttin (c) 2018
  */
 
 #include <iostream>
