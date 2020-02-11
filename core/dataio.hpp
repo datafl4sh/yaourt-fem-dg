@@ -24,7 +24,8 @@
 
 #include "mesh.hpp"
 
-namespace dg2d {
+namespace yaourt {
+namespace dataio {
 
 class silo_database
 {
@@ -236,6 +237,7 @@ public:
     }
 };
 
-} // namespace dg2d
+} // namespace dataio
+} // namespace yaourt
 
 #endif

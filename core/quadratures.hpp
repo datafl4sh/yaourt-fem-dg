@@ -50,7 +50,7 @@
 
 //#define USE_DUNAVANT
 
-namespace dg2d {
+namespace yaourt {
 namespace quadratures {
 
 
@@ -522,4 +522,4 @@ integrate(const quad_mesh<T>& msh,
 }
 
 } // namespace quadratures
-} // namespace dg2d
+} // namespace yaourt

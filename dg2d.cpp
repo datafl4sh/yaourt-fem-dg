@@ -19,6 +19,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 
 #include <cstring>
 #include <cmath>
@@ -183,8 +184,8 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
 
     for (auto& tcl : msh.cells)
     {
-        auto qps = dg2d::quadratures::integrate(msh, tcl, 2*degree);
-        auto tbasis = dg2d::bases::make_basis(msh, tcl, degree);
+        auto qps = yaourt::quadratures::integrate(msh, tcl, 2*degree);
+        auto tbasis = yaourt::bases::make_basis(msh, tcl, degree);
 
         blaze::DynamicMatrix<T> K(tbasis.size(), tbasis.size(), 0.0);
         blaze::DynamicVector<T> loc_rhs(tbasis.size(), 0.0);
@@ -207,12 +208,12 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
 
             auto nv = neighbour_via(msh, tcl, fc);
             auto ncl = nv.first;
-            auto nbasis = dg2d::bases::make_basis(msh, ncl, degree);
+            auto nbasis = yaourt::bases::make_basis(msh, ncl, degree);
             assert(tbasis.size() == nbasis.size());
 
             auto n     = normal(msh, tcl, fc);
             auto eta_l = eta / diameter(msh, fc);
-            auto f_qps = dg2d::quadratures::integrate(msh, fc, 2*degree);
+            auto f_qps = yaourt::quadratures::integrate(msh, fc, 2*degree);
             
             for (auto& fqp : f_qps)
             {
@@ -275,7 +276,7 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
     for (auto& cl : msh.cells)
     {
 
-        auto basis = dg2d::bases::make_basis(msh, cl, degree);
+        auto basis = yaourt::bases::make_basis(msh, cl, degree);
         auto basis_size = basis.size();
         auto ofs = offset(msh, cl);
 
@@ -283,7 +284,7 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
         for (size_t i = 0; i < basis_size; i++)
             loc_sol[i] = sol[basis_size * ofs + i];
 
-        auto tps = dg2d::make_test_points(msh, cl, 6);
+        auto tps = yaourt::make_test_points(msh, cl, 6);
         for (auto& tp : tps)
         {
             auto phi = basis.eval(tp);
@@ -295,7 +296,7 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
         blaze::DynamicMatrix<T> M(basis_size, basis_size, 0.0);
         blaze::DynamicVector<T> a(basis_size, 0.0);
 
-        auto qps = dg2d::quadratures::integrate(msh, cl, 2*degree);
+        auto qps = yaourt::quadratures::integrate(msh, cl, 2*degree);
         for (auto& qp : qps)
         {
             auto ep   = qp.point();
@@ -318,7 +319,7 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
 #ifdef WITH_SILO
 
     blaze::DynamicVector<T> var(msh.cells.size());
-    auto bs = dg2d::bases::scalar_basis_size(degree, 2);
+    auto bs = yaourt::bases::scalar_basis_size(degree, 2);
     for (size_t i = 0; i < msh.cells.size(); i++)
     {
         var[i] = sol[bs*i];
@@ -340,7 +341,7 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
         dbg_beta_y[i] = beta_pt[1];
     }
 
-    dg2d::silo_database silo;
+    yaourt::dataio::silo_database silo;
     silo.create("test_dg.silo");
 
     silo.add_mesh(msh, "test_mesh");
@@ -378,8 +379,8 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
     assembler<mesh_type> assm(msh, degree, cfg.use_preconditioner);
     for (auto& tcl : msh.cells)
     {
-        auto qps = dg2d::quadratures::integrate(msh, tcl, 2*degree);
-        auto tbasis = dg2d::bases::make_basis(msh, tcl, degree);
+        auto qps = yaourt::quadratures::integrate(msh, tcl, 2*degree);
+        auto tbasis = yaourt::bases::make_basis(msh, tcl, degree);
 
         blaze::DynamicMatrix<T> K(tbasis.size(), tbasis.size(), 0.0);
         blaze::DynamicVector<T> loc_rhs(tbasis.size(), 0.0);
@@ -406,11 +407,11 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
 
             auto nv = neighbour_via(msh, tcl, fc);
             auto ncl = nv.first;
-            auto nbasis = dg2d::bases::make_basis(msh, ncl, degree);
+            auto nbasis = yaourt::bases::make_basis(msh, ncl, degree);
             assert(tbasis.size() == nbasis.size());
 
             auto n     = normal(msh, tcl, fc);
-            auto f_qps = dg2d::quadratures::integrate(msh, fc, 2*degree);
+            auto f_qps = yaourt::quadratures::integrate(msh, fc, 2*degree);
             
             for (auto& fqp : f_qps)
             {
@@ -478,7 +479,7 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
     status.L2_errsq_mm = 0.0;
     for (auto& cl : msh.cells)
     {
-        auto basis = dg2d::bases::make_basis(msh, cl, degree);
+        auto basis = yaourt::bases::make_basis(msh, cl, degree);
         auto basis_size = basis.size();
         auto ofs = offset(msh, cl);
 
@@ -486,7 +487,7 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
         for (size_t i = 0; i < basis_size; i++)
             loc_sol[i] = sol[basis_size * ofs + i];
 
-        auto tps = dg2d::make_test_points(msh, cl, 6);
+        auto tps = yaourt::make_test_points(msh, cl, 6);
         for (auto& tp : tps)
         {
             auto phi = basis.eval(tp);
@@ -498,7 +499,7 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
         blaze::DynamicMatrix<T> M(basis_size, basis_size, 0.0);
         blaze::DynamicVector<T> a(basis_size, 0.0);
 
-        auto qps = dg2d::quadratures::integrate(msh, cl, 2*degree);
+        auto qps = yaourt::quadratures::integrate(msh, cl, 2*degree);
         for (auto& qp : qps)
         {
             auto ep   = qp.point();
@@ -521,7 +522,7 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
 
 #ifdef WITH_SILO
     blaze::DynamicVector<T> var(msh.cells.size());
-    auto bs = dg2d::bases::scalar_basis_size(degree, 2);
+    auto bs = yaourt::bases::scalar_basis_size(degree, 2);
     for (size_t i = 0; i < msh.cells.size(); i++)
     {
         var[i] = sol[bs*i];
@@ -542,7 +543,7 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
         dbg_beta_y[i] = beta_pt[1];
     }
 
-    dg2d::silo_database silo;
+    yaourt::dataio::silo_database silo;
     silo.create("test_dg.silo");
 
     silo.add_mesh(msh, "test_mesh");
@@ -558,10 +559,14 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
     return status;
 }
 
+#include "dg2d_maxwell.hpp"
+
 enum class dg_problem
 {
     DIFFUSION,
-    ADVECTION_REACTION
+    ADVECTION_REACTION,
+    MAXWELL_TE,
+    MAXWELL_TM
 };
 
 template<typename Mesh>
@@ -573,7 +578,7 @@ void run_dg(const dg_config<typename Mesh::coordinate_type>& cfg,
 
     mesh_type msh;
 
-    auto mesher = dg2d::get_mesher(msh);
+    auto mesher = yaourt::get_mesher(msh);
     mesher.create_mesh(msh, cfg.ref_levels);
 
     if (cfg.shatter)
@@ -594,6 +599,20 @@ void run_dg(const dg_config<typename Mesh::coordinate_type>& cfg,
             std::cout << "Running dG advection-reaction solver" << std::endl;
             std::cout << "  degree: " << cfg.degree << std::endl;
             status = run_advection_reaction_solver(msh, cfg);
+            std::cout << status << std::endl;
+            break;
+
+        case dg_problem::MAXWELL_TE:
+            std::cout << "Running dG Maxwell TE solver" << std::endl;
+            std::cout << "  degree: " << cfg.degree << std::endl;
+            status = run_maxwell_TE_solver(msh, cfg);
+            std::cout << status << std::endl;
+            break;
+
+        case dg_problem::MAXWELL_TM:
+            std::cout << "Running dG Maxwell TM solver" << std::endl;
+            std::cout << "  degree: " << cfg.degree << std::endl;
+            status = run_maxwell_TM_solver(msh, cfg);
             std::cout << status << std::endl;
             break;
     }
@@ -651,6 +670,10 @@ int main(int argc, char **argv)
                     dp = dg_problem::DIFFUSION;
                 else if ( strcmp(optarg, "adv-re") == 0 )
                     dp = dg_problem::ADVECTION_REACTION;
+                else if ( strcmp(optarg, "maxwell_TE") == 0 )
+                    dp = dg_problem::MAXWELL_TE;
+                else if ( strcmp(optarg, "maxwell_TM") == 0 )
+                    dp = dg_problem::MAXWELL_TM;
                 break;
 
             case 'p':
@@ -680,11 +703,11 @@ int main(int argc, char **argv)
     switch (mt)
     {
         case meshtype::TRIANGULAR:
-            run_dg< dg2d::simplicial_mesh<T> >(cfg, dp);
+            run_dg< yaourt::simplicial_mesh<T> >(cfg, dp);
             break;
 
         case meshtype::QUADRANGULAR:
-            run_dg< dg2d::quad_mesh<T> >(cfg, dp);
+            run_dg< yaourt::quad_mesh<T> >(cfg, dp);
             break;
 
         case meshtype::TETRAHEDRAL:

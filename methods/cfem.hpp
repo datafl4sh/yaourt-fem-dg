@@ -25,7 +25,8 @@
 #include "../core/blaze_sparse_init.hpp"
 
 
-namespace dg2d { namespace cfem {
+namespace yaourt {
+namespace cfem {
 
 template<typename T>
 blaze::StaticVector<T, 3>
@@ -203,4 +204,4 @@ auto get_assembler(const Mesh& msh, size_t degree)
 }
 
 } //namespace cfem
-} //namespace dg2d
+} //namespace yaourt

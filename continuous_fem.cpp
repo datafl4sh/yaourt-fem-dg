@@ -31,15 +31,15 @@
 
 template<typename T>
 blaze::StaticVector<T, 3>
-compute_rhs(const dg2d::simplicial_mesh<T>& msh,
-            const typename dg2d::simplicial_mesh<T>::cell_type& cl)
+compute_rhs(const yaourt::simplicial_mesh<T>& msh,
+            const typename yaourt::simplicial_mesh<T>::cell_type& cl)
 {
     auto pts = points(msh, cl);
     blaze::StaticVector<T,3> local_rhs;
 
     auto bar = barycenter(msh, cl);
     auto meas = measure(msh, cl);
-    T bval = std::sin(M_PI*bar.x()) * std::sin(M_PI*bar.y());
+    T bval = std::sin(100*M_PI*bar.x()) * std::sin(100*M_PI*bar.y());
     bval = bval * 2.0 * M_PI * M_PI * meas / 3.0;
 
     local_rhs[0] = bval;
@@ -54,16 +54,16 @@ int main(int argc, char **argv)
 
     using T = double;
 
-    dg2d::simplicial_mesh<T> msh;
-    auto mesher = dg2d::get_mesher(msh);
+    yaourt::simplicial_mesh<T> msh;
+    auto mesher = yaourt::get_mesher(msh);
 
     mesher.create_mesh(msh, 6);
 
-    auto assembler = dg2d::cfem::get_assembler(msh, 1);
+    auto assembler = yaourt::cfem::get_assembler(msh, 1);
 
     for(auto& cl : msh.cells)
     {
-        auto local_lhs = dg2d::cfem::stiffness_matrix(msh, cl);
+        auto local_lhs = yaourt::cfem::stiffness_matrix(msh, cl);
         auto local_rhs = compute_rhs(msh, cl);
         assembler.assemble(msh, cl, local_lhs, local_rhs);
     }
@@ -84,7 +84,7 @@ int main(int argc, char **argv)
     assembler.expand(sol, exp_sol);
 
 #ifdef WITH_SILO
-    dg2d::silo_database silo;
+    yaourt::dataio::silo_database silo;
     silo.create("test.silo");
 
     silo.add_mesh(msh, "test_mesh");

@@ -28,7 +28,7 @@
 
 #include "point.hpp"
 
-namespace dg2d {
+namespace yaourt {
 
 namespace priv {
 
@@ -613,5 +613,28 @@ make_test_points(const quad_mesh<T>& msh,
     return test_points;
 }
 
+template<typename Mesh>
+void
+describe(const Mesh& msh, const typename Mesh::cell_type& cl)
+{
+    std::cout << cl << std::endl;
 
-} //namespace dg2d
+    std::cout << "  Points: ";
+    auto pts = points(msh, cl);
+    for (auto& pt : pts)
+        std::cout << pt << " ";
+    std::cout << std::endl;
+
+    std::cout << "  Measure: " << measure(msh, cl) << std::endl;
+
+    std::cout << "  Faces:";
+    auto fcs = faces(msh, cl);
+    for (auto& fc : fcs)
+    {
+        std::cout << "    " << fc << ", norm: " << trans(normal(msh, cl, fc));
+        std::cout << "    Measure: " << measure(msh, fc) << std::endl;
+    }
+}
+
+
+} //namespace yaourt

@@ -165,11 +165,26 @@ solve_LU(const DynamicMatrix<T,SO>& A, const DynamicVector<T,TF>& b)
 
     const std::unique_ptr<int[]> ipiv( new int[ size ] );
     getrf( At, ipiv.get() );
-    getrs(At, ret, 'N', ipiv.get() );
+    getrs( At, ret, 'N', ipiv.get() );
 
     return ret;
 }
 
+template< typename T, bool SO >
+const DynamicMatrix<T,SO>
+solve_LU(const DynamicMatrix<T,SO>& A, const DynamicMatrix<T,SO>& B)
+{
+    DynamicMatrix<T,SO> At = A;
+    DynamicMatrix<T,SO> ret = B;
+
+    auto size = A.rows();
+
+    const std::unique_ptr<int[]> ipiv( new int[ size ] );
+    getrf( At, ipiv.get() );
+    getrs( At, ret, 'N', ipiv.get() );
+
+    return ret;
+}
 
 } // namespace blaze
 

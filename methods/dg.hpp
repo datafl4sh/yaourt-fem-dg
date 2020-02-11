@@ -54,7 +54,7 @@ public:
 
     void initialize(const Mesh& msh, size_t degree, bool bpc = false)
     {
-        basis_size = dg2d::bases::scalar_basis_size(degree,2);
+        basis_size = yaourt::bases::scalar_basis_size(degree,2);
         sys_size = basis_size * msh.cells.size();
 
         lhs.resize( sys_size, sys_size );

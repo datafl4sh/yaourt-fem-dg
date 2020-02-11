@@ -21,7 +21,7 @@
 
 #include "mesh.hpp"
 
-namespace dg2d {
+namespace yaourt {
 
 template<typename Mesh>
 class mesher;
@@ -370,4 +370,4 @@ get_mesher(const Mesh&)
 	return mesher<Mesh>(true);
 }
 
-}
+} // namespace yaourt

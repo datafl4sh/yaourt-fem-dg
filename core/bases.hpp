@@ -23,7 +23,7 @@
 
 #include "mesh.hpp"
 
-namespace dg2d{
+namespace yaourt {
 namespace bases {
 
 /* Perform exponentiation by integer exponent. */
@@ -229,4 +229,4 @@ auto make_basis(const Mesh& msh, const Element& elem, size_t degree)
 }
 
 } // namespace bases
-} // namespace dg2d
+} // namespace yaourt
