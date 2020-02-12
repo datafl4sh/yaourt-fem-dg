@@ -54,10 +54,13 @@ struct dg_config
     bool            shatter;
     bool            ar_use_upwinding;
 
+    T               delta_t;
+    size_t          timesteps;
+
 
     dg_config()
         : eta(1.0), degree(1), ref_levels(4), use_preconditioner(false),
-          ar_use_upwinding(false)
+          ar_use_upwinding(false), delta_t(0.01), timesteps(100)
     {}
 };
 
@@ -640,10 +643,18 @@ int main(int argc, char **argv)
 
     cfg.shatter = false;
 
-    while ( (ch = getopt(argc, argv, "e:k:r:m:P:hpuS")) != -1 )
+    while ( (ch = getopt(argc, argv, "e:k:r:m:P:hpuSt:d:")) != -1 )
     {
         switch(ch)
         {
+            case 'd':
+                cfg.delta_t = atof(optarg);
+                break;
+
+            case 't':
+                cfg.timesteps = atoi(optarg);
+                break;
+
             case 'e':
                 cfg.eta = atof(optarg);
                 break;

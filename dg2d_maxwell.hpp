@@ -385,8 +385,8 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
     }
 
     /* Time parameters */
-    size_t timesteps = 400;
-    T delta_t = 0.01;
+    size_t timesteps = cfg.timesteps;
+    T delta_t = cfg.delta_t;
 
     /* Global data vectors */
     auto basis_size = yaourt::bases::scalar_basis_size(degree, 2);
@@ -451,13 +451,13 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
 
         
         get_global_block(0, 0) = blaze::IdentityMatrix<T>(basis_size);
-        //get_global_block(0, 2) = -dt_mu * invM2d_Sy;
+        get_global_block(0, 2) = -dt_mu * invM2d_Sy;
 
         get_global_block(1, 1) = blaze::IdentityMatrix<T>(basis_size);
-        //get_global_block(1, 2) = +dt_mu * invM2d_Sx;
+        get_global_block(1, 2) = +dt_mu * invM2d_Sx;
 
-        //get_global_block(2, 0) = -dt_eps * invM2d_Sy;
-        //get_global_block(2, 1) = +dt_eps * invM2d_Sx;
+        get_global_block(2, 0) = -dt_eps * invM2d_Sy;
+        get_global_block(2, 1) = +dt_eps * invM2d_Sx;
         get_global_block(2, 2) = blaze::IdentityMatrix<T>(basis_size);
 
         /* Do numerical fluxes */
@@ -482,7 +482,6 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
                 return submatrix(M, offset_i, offset_j, basis_size, basis_size);
             };
 
-#if 0
             auto f_qps = yaourt::quadratures::integrate(msh, fc, 2*degree);
             for (auto& fqp : f_qps)
             {
@@ -495,19 +494,19 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
                     auto tphi  = tbasis.eval(ep);
                     auto tmass = fqp.weight() * tphi * trans(tphi);
 
-                    get_block(FC_diag, 0, 2) += -ny * 0.5 * dt_mu * tmass;
-                    get_block(FC_diag, 1, 2) += +nx * 0.5 * dt_mu * tmass;
-                    get_block(FC_diag, 2, 0) += -ny * 0.5 * dt_eps * tmass;
-                    get_block(FC_diag, 2, 1) += +nx * 0.5 * dt_eps * tmass;
+                    get_block(FC_diag, 0, 2) += +ny * 0.5 * dt_mu * tmass;
+                    get_block(FC_diag, 1, 2) += -nx * 0.5 * dt_mu * tmass;
+                    get_block(FC_diag, 2, 0) += +ny * 0.5 * dt_eps * tmass;
+                    get_block(FC_diag, 2, 1) += -nx * 0.5 * dt_eps * tmass;
 
 
                     auto nphi  = nbasis.eval(ep);
                     auto nmass = fqp.weight() * tphi * trans(nphi);
 
-                    get_block(FC_offdiag, 0, 2) += +ny * 0.5 * dt_mu * nmass;
-                    get_block(FC_offdiag, 1, 2) += -nx * 0.5 * dt_mu * nmass;
-                    get_block(FC_offdiag, 2, 0) += +ny * 0.5 * dt_eps * nmass;
-                    get_block(FC_offdiag, 2, 1) += -nx * 0.5 * dt_eps * nmass;
+                    get_block(FC_offdiag, 0, 2) -= +ny * 0.5 * dt_mu * nmass;
+                    get_block(FC_offdiag, 1, 2) -= -nx * 0.5 * dt_mu * nmass;
+                    get_block(FC_offdiag, 2, 0) -= +ny * 0.5 * dt_eps * nmass;
+                    get_block(FC_offdiag, 2, 1) -= -nx * 0.5 * dt_eps * nmass;
 
                 }
                 else
@@ -517,9 +516,11 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
 
                     auto tphi  = tbasis.eval(ep);
                     auto tmass = fqp.weight() * tphi * trans(tphi);
-                    //get_block(FC_diag, 0, 0) += 1.0 * (delta_t/mu[cell_i]) * tmass;
-                    //get_block(FC_diag, 1, 1) += 1.0 * (delta_t/mu[cell_i]) * tmass;
-                    get_block(FC_diag, 2, 2) += 2.0 * (delta_t/eps[cell_i]) * tmass;
+                    get_block(FC_diag, 0, 0) += nx * dt_mu * tmass;
+                    get_block(FC_diag, 1, 0) += nx * dt_mu * tmass;
+                    get_block(FC_diag, 0, 1) += ny * dt_mu * tmass;
+                    get_block(FC_diag, 1, 1) += ny * dt_mu * tmass;
+                    get_block(FC_diag, 2, 2) += dt_eps * tmass;
                 }
             }
 
@@ -528,7 +529,7 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
                 for (size_t j = 0; j < 3; j++)
                 {
                     blaze::DynamicMatrix<T> blk = get_block(FC_diag, i, j);
-                    get_global_block(i, j) = solve(M2d, blk);
+                    get_global_block(i, j) += solve(M2d, blk);
                 }
             }
 
@@ -547,7 +548,7 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
                     }
                 }
             }
-#endif
+
             /* LAST */
             offdiag_contrib_i++;
         } //for each face
@@ -556,13 +557,6 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
         cell_i++;
     } //for each cell
 
-
-    /* Initial conditions */
-    auto ic = [&](const typename Mesh::point_type& pt) -> auto {
-        auto m = 1;
-        auto n = 1;
-        return std::sin(m*M_PI*pt.x()) * std::sin(n*M_PI*pt.y());
-    };
 
     auto test_src = [&](const typename Mesh::point_type& pt, T t) -> auto {
         auto f = 1;
@@ -587,6 +581,29 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
         size_t loc_ofs = 2*basis_size;
         return 3*cell_i*basis_size + loc_ofs;
     };
+
+    auto m = 1;
+    auto n = 1;
+    auto omega = M_PI*std::sqrt(m*m + n*n);
+
+    /* Initial conditions */
+    auto ic = [&](const typename Mesh::point_type& pt) -> auto {
+        return std::sin(m*M_PI*pt.x()) * std::sin(n*M_PI*pt.y());
+    };
+
+    /* Reference solution */
+    auto Hx_ref = [&](const typename Mesh::point_type& pt, T t) -> auto {
+        return -(M_PI*n/omega) * std::sin(m*M_PI*pt.x()) * std::cos(n*M_PI*pt.y()) * std::sin(omega*t);
+    };
+
+    auto Hy_ref = [&](const typename Mesh::point_type& pt, T t) -> auto {
+        return (M_PI*m/omega) * std::cos(m*M_PI*pt.x()) * std::sin(n*M_PI*pt.y()) * std::sin(omega*t);
+    };
+
+    auto Ez_ref = [&](const typename Mesh::point_type& pt, T t) -> auto {
+        return std::sin(m*M_PI*pt.x()) * std::sin(n*M_PI*pt.y()) * std::cos(omega*t);
+    };
+
 
     cell_i = 0;
     for (auto& tcl : msh.cells)
@@ -616,6 +633,10 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
         blaze::DynamicVector<T> Hx(msh.cells.size(), 0.0);
         blaze::DynamicVector<T> Hy(msh.cells.size(), 0.0);
         blaze::DynamicVector<T> Ez(msh.cells.size(), 0.0);
+
+        blaze::DynamicVector<T> Hx_refsol(msh.cells.size(), 0.0);
+        blaze::DynamicVector<T> Hy_refsol(msh.cells.size(), 0.0);
+        blaze::DynamicVector<T> Ez_refsol(msh.cells.size(), 0.0);
 #endif
 #if 0
         cell_i = 0;
@@ -679,7 +700,6 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
 
             get_dofs(global_dofs_T_plus_one, cell_i) = get_diag() * get_dofs(global_dofs_T, cell_i);
 
-
             auto fcs = faces(msh, tcl);
             for (auto& fc : fcs)
             {
@@ -699,6 +719,12 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
             Hx[cell_i] = global_dofs_T[cell_i*3*basis_size];
             Hy[cell_i] = global_dofs_T[cell_i*3*basis_size + basis_size];
             Ez[cell_i] = global_dofs_T[cell_i*3*basis_size + 2*basis_size];
+
+            auto bar = barycenter(msh, tcl);
+
+            Hx_refsol[cell_i] = Hx_ref(bar, t*delta_t);
+            Hy_refsol[cell_i] = Hy_ref(bar, t*delta_t);
+            Ez_refsol[cell_i] = Ez_ref(bar, t*delta_t);
 #endif
 
             /* LAST */
@@ -716,6 +742,10 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
         silo.add_zonal_variable("mesh_TM", "Hx", Hx);
         silo.add_zonal_variable("mesh_TM", "Hy", Hy);
         silo.add_zonal_variable("mesh_TM", "Ez", Ez);
+
+        silo.add_zonal_variable("mesh_TM", "Hx_refsol", Hx_refsol);
+        silo.add_zonal_variable("mesh_TM", "Hy_refsol", Hy_refsol);
+        silo.add_zonal_variable("mesh_TM", "Ez_refsol", Ez_refsol);
 #endif
         global_dofs_T = global_dofs_T_plus_one;
     }   
