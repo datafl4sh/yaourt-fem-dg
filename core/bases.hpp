@@ -165,6 +165,124 @@ public:
     }
 };
 
+#if 0
+template<template<typename, size_t, typename, typename> class Mesh,
+         typename T, typename FaceT>
+class scalar_basis<Mesh<T,2,quadrangle,FaceT>, quadrangle>
+{
+    typedef Mesh<T,2,quadrangle,FaceT>      mesh_type;
+    typedef quadrangle                      elem_type;
+    typedef typename mesh_type::point_type  point_type;
+
+    point_type      elem_bar;
+    size_t          basis_degree, basis_size;
+    T               elem_h;
+
+    T legendre_eval(T x, size_t degree) const
+    {
+        switch (degree)
+        {
+            case 0: return 1;
+            case 1: return x;
+            case 2: return 0.5*(3*x*x - 1);
+            case 3: return 0.5*(5*x*x - 3)*x;
+        }
+    }
+
+    T legendre_eval_deriv(T x, size_t degree) const
+    {
+        switch (degree)
+        {
+            case 0: return 0;
+            case 1: return 1;
+            case 2: return 3*x;
+            case 3: return 7.5*x*x - 1.5;
+        }
+    }
+
+
+public:
+    scalar_basis(const mesh_type& msh, const elem_type& elem, size_t degree)
+    {
+        elem_bar        = barycenter(msh, elem);
+        elem_h          = diameter(msh, elem);
+        basis_degree    = degree;
+        basis_size      = scalar_basis_size(degree, 2);
+    }
+
+    blaze::DynamicVector<T>
+    eval(const point_type& pt) const
+    {
+        blaze::DynamicVector<T> ret(basis_size);
+
+        const auto b = (pt - elem_bar) / (0.5*elem_h);
+
+        size_t pos = 0;
+        for (size_t k = 0; k <= basis_degree; k++)
+        {
+            for (size_t i = 0; i <= k; i++)
+            {
+                const auto pow_x = k - i;
+                const auto pow_y = i;
+
+                const auto px = legendre_eval(b.x(), pow_x);
+                const auto py = legendre_eval(b.y(), pow_y);
+
+                ret[pos++] = px * py;
+            }
+        }
+
+        assert(pos == basis_size);
+
+        return ret;
+    }
+
+    blaze::DynamicMatrix<T>
+    eval_grads(const point_type& pt) const
+    {
+        blaze::DynamicMatrix<T> ret(basis_size, 2);
+
+        const auto ih = 2.0 / elem_h;
+        const auto b = (pt - elem_bar) / (0.5*elem_h);
+
+        size_t pos = 0;
+        for (size_t k = 0; k <= basis_degree; k++)
+        {
+            for (size_t i = 0; i <= k; i++)
+            {
+                const auto pow_x = k - i;
+                const auto pow_y = i;
+
+                const auto px = legendre_eval(b.x(), pow_x);
+                const auto py = legendre_eval(b.y(), pow_y);
+                const auto dx = (pow_x == 0) ? 0 : ih * legendre_eval_deriv(b.x(), pow_x);
+                const auto dy = (pow_y == 0) ? 0 : ih * legendre_eval_deriv(b.y(), pow_y);
+
+                ret(pos, 0) = dx * py;
+                ret(pos, 1) = px * dy;
+                pos++;
+            }
+        }
+
+        assert(pos == basis_size);
+
+        return ret;
+    }
+
+    size_t
+    size() const
+    {
+        return basis_size;
+    }
+
+    size_t
+    degree() const
+    {
+        return basis_degree;
+    }
+};
+#endif
+
 template<template<typename, size_t, typename, typename> class Mesh,
          typename T, typename CellT, typename FaceT>
 class scalar_basis<Mesh<T,2,CellT,FaceT>, FaceT>

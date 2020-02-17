@@ -52,15 +52,18 @@ struct dg_config
     int             ref_levels;
     bool            use_preconditioner;
     bool            shatter;
-    bool            ar_use_upwinding;
+    bool            use_upwinding;
+    bool            use_rk4;
 
     T               delta_t;
     size_t          timesteps;
+    size_t          dumpsteps;
 
 
     dg_config()
         : eta(1.0), degree(1), ref_levels(4), use_preconditioner(false),
-          ar_use_upwinding(false), delta_t(0.01), timesteps(100)
+          use_upwinding(false), delta_t(0.01), timesteps(100), dumpsteps(0),
+          use_rk4(false)
     {}
 };
 
@@ -425,7 +428,7 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
                 T beta_nf = dot(params::beta(ep), n);
                 T fi_coeff;
 
-                if (cfg.ar_use_upwinding)
+                if (cfg.use_upwinding)
                     fi_coeff = beta_nf - eta * std::abs(beta_nf);
                 else
                     fi_coeff = beta_nf;
@@ -643,10 +646,18 @@ int main(int argc, char **argv)
 
     cfg.shatter = false;
 
-    while ( (ch = getopt(argc, argv, "e:k:r:m:P:hpuSt:d:")) != -1 )
+    while ( (ch = getopt(argc, argv, "e:k:r:m:P:hpuSt:d:4")) != -1 )
     {
         switch(ch)
         {
+            case '4':
+                cfg.use_rk4 = true;
+                break;
+
+            case 's':
+                cfg.dumpsteps = atoi(optarg);
+                break;
+
             case 'd':
                 cfg.delta_t = atof(optarg);
                 break;
@@ -696,7 +707,7 @@ int main(int argc, char **argv)
                 break;
 
             case 'u':
-                cfg.ar_use_upwinding = true;
+                cfg.use_upwinding = true;
                 break;
 
             case 'h':
