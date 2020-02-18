@@ -54,6 +54,7 @@ struct dg_config
     bool            shatter;
     bool            use_upwinding;
     bool            use_rk4;
+    char*           error_fn;
 
     T               delta_t;
     size_t          timesteps;
@@ -63,7 +64,7 @@ struct dg_config
     dg_config()
         : eta(1.0), degree(1), ref_levels(4), use_preconditioner(false),
           use_upwinding(false), delta_t(0.01), timesteps(100), dumpsteps(0),
-          use_rk4(false)
+          use_rk4(false), error_fn(nullptr)
     {}
 };
 
@@ -646,10 +647,14 @@ int main(int argc, char **argv)
 
     cfg.shatter = false;
 
-    while ( (ch = getopt(argc, argv, "e:k:r:m:P:hpuSt:d:4")) != -1 )
+    while ( (ch = getopt(argc, argv, "e:k:r:m:P:hpuSt:d:4E:")) != -1 )
     {
         switch(ch)
         {
+            case 'E':
+                cfg.error_fn = optarg;
+                break;
+
             case '4':
                 cfg.use_rk4 = true;
                 break;

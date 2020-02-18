@@ -699,6 +699,21 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
         cell_i++;
     }
 
+    std::ofstream err_ofs;
+
+    if (cfg.error_fn)
+    {
+        err_ofs.open(cfg.error_fn);
+        err_ofs << "# -> Maxwell TM solver <- " << std::endl;
+        err_ofs << "# mesh levels:      " << cfg.ref_levels << std::endl;
+        err_ofs << "# DOFs:             " << 3*msh.cells.size()*basis_size << std::endl;
+        err_ofs << "# degree:           " << cfg.degree << std::endl;
+        err_ofs << "# delta_t:          " << cfg.delta_t << std::endl;
+        err_ofs << "# total steps:      " << cfg.timesteps << std::endl;
+        err_ofs << "# upwind:           " << (cfg.use_upwinding ? "yes" : "no") << std::endl;
+        err_ofs << "# time integrator:  " << (cfg.use_rk4 ? "RK4" : "EE") << std::endl;
+    }
+
     for (size_t t = 0; t < timesteps; t++)
     {
 
@@ -769,6 +784,7 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
         auto evolve = [&](blaze::DynamicVector<T>& v, blaze::DynamicVector<T>& v_next, T dt) -> void {
             size_t cur_cel = 0;
             size_t cur_od_contrib = 0;
+    
             for (auto& tcl : msh.cells)
             {
                 get_dofs(v_next, cur_cel) = get_diag(cur_cel) * (dt * get_dofs(v, cur_cel));
@@ -859,6 +875,50 @@ run_maxwell_TM_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>
             silo.add_zonal_variable("mesh_TM", "Hx_refsol", Hx_refsol);
             silo.add_zonal_variable("mesh_TM", "Hy_refsol", Hy_refsol);
             silo.add_zonal_variable("mesh_TM", "Ez_refsol", Ez_refsol);
+        }
+
+        if (cfg.error_fn)
+        {
+            T Hx_err = 0.0, Hx_norm = 0.0;
+            T Hy_err = 0.0, Hy_norm = 0.0;
+            T Ez_err = 0.0, Ez_norm = 0.0;
+
+            cell_i = 0;
+            for (auto& tcl : msh.cells)
+            {
+                auto local_dofs = get_dofs(global_dofs_T_plus_one, cell_i);
+                auto local_Hx_dofs = subvector(local_dofs, 0, basis_size);
+                auto local_Hy_dofs = subvector(local_dofs, basis_size, basis_size);
+                auto local_Ez_dofs = subvector(local_dofs, 2*basis_size, basis_size);
+
+                auto tbasis = yaourt::bases::make_basis(msh, tcl, degree);
+                auto qps = yaourt::quadratures::integrate(msh, tcl, 2*degree);
+                for (auto& qp : qps)
+                {
+                    auto phi = tbasis.eval(qp.point());
+                    
+                    auto Hx_num = dot(local_Hx_dofs, phi);
+                    auto Hx_ana = Hx_ref(qp.point(), t*delta_t);
+                    Hx_err  += qp.weight() * (Hx_num-Hx_ana)*(Hx_num-Hx_ana);
+                    //Hx_norm += qp.weight() * (Hx_ana*Hx_ana);
+
+                    auto Hy_num = dot(local_Hy_dofs, phi);
+                    auto Hy_ana = Hy_ref(qp.point(), t*delta_t);
+                    Hy_err += qp.weight() * (Hy_num-Hy_ana)*(Hy_num-Hy_ana);
+                    //Hy_norm += qp.weight() * (Hy_ana*Hy_ana);
+
+                    auto Ez_num = dot(local_Ez_dofs, phi);
+                    auto Ez_ana = Ez_ref(qp.point(), t*delta_t);
+                    Ez_err += qp.weight() * (Ez_num-Ez_ana)*(Ez_num-Ez_ana);
+                    //Ez_norm += qp.weight() * (Ez_ana*Ez_ana);
+                }
+
+                /* LAST */
+                cell_i++;
+            }
+
+            err_ofs << t*delta_t << " " << std::sqrt(Hx_err) << " " << std::sqrt(Hy_err);
+            err_ofs << " " << std::sqrt(Ez_err) << std::endl;
         }
 #endif
         global_dofs_T = global_dofs_T_plus_one;
