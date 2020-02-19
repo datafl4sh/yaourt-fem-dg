@@ -30,10 +30,11 @@ namespace dataio {
 class silo_database
 {
     DBfile          *m_siloDb;
+    DBoptlist       *m_optlist;
 
 public:
     silo_database()
-        : m_siloDb(nullptr)
+        : m_siloDb(nullptr), m_optlist(nullptr)
     {}
 
     bool create(const std::string& db_name)
@@ -59,8 +60,17 @@ public:
     bool close()
     {
         if (m_siloDb)
+        {
             DBClose(m_siloDb);
-        m_siloDb = NULL;
+            m_siloDb = NULL;
+        }
+
+        if (m_optlist)
+        {
+            DBFreeOptlist(m_optlist);
+            m_optlist = nullptr;
+        }
+
         return true;
     }
 
@@ -68,6 +78,22 @@ public:
     {
         if (m_siloDb)
             DBClose(m_siloDb);
+
+        if (m_optlist)
+            DBFreeOptlist(m_optlist);
+    }
+
+    template<typename T>
+    bool
+    add_time(int cycle, T time)
+    {
+        static_assert(std::is_same<T,double>::value, "Wrong type");
+
+        m_optlist = DBMakeOptlist(2);
+        DBAddOption(m_optlist, DBOPT_DTIME, &time);
+        DBAddOption(m_optlist, DBOPT_CYCLE, &cycle);
+
+        return true;
     }
 
     template<typename T>
@@ -102,6 +128,7 @@ public:
 
         int lnodelist = nodelist.size();
 
+        int shapetype[] = { DB_ZONETYPE_TRIANGLE };
         int shapesize[] = {3};
         int shapecounts[] = { static_cast<int>(msh.cells.size()) };
         int nshapetypes = 1;
@@ -113,19 +140,20 @@ public:
         zlname << "zonelist_" << name;
         std::string zonelist_name = zlname.str();
 
-        DBPutZonelist(m_siloDb, zonelist_name.c_str(), nzones, ndims,
-            nodelist.data(), lnodelist, 1, shapesize, shapecounts, nshapetypes);
+        DBPutZonelist2(m_siloDb, zonelist_name.c_str(), nzones, ndims,
+            nodelist.data(), lnodelist, 1, 0, 0, shapetype, shapesize,
+            shapecounts, nshapetypes, NULL);
 
         if ( std::is_same<T, float>::value )
         {
             DBPutUcdmesh(m_siloDb, name.c_str(), ndims, NULL, coords, nnodes, nzones,
-                zonelist_name.c_str(), NULL, DB_FLOAT, NULL);
+                zonelist_name.c_str(), NULL, DB_FLOAT, m_optlist);
         }
 
         if ( std::is_same<T, double>::value )
         {
             DBPutUcdmesh(m_siloDb, name.c_str(), ndims, NULL, coords, nnodes, nzones,
-                zonelist_name.c_str(), NULL, DB_DOUBLE, NULL);
+                zonelist_name.c_str(), NULL, DB_DOUBLE, m_optlist);
         }
 
 
@@ -164,6 +192,7 @@ public:
 
         int lnodelist = nodelist.size();
 
+        int shapetype[] = { DB_ZONETYPE_QUAD };
         int shapesize[] = {4};
         int shapecounts[] = { static_cast<int>(msh.cells.size()) };
         int nshapetypes = 1;
@@ -175,19 +204,20 @@ public:
         zlname << "zonelist_" << name;
         std::string zonelist_name = zlname.str();
 
-        DBPutZonelist(m_siloDb, zonelist_name.c_str(), nzones, ndims,
-            nodelist.data(), lnodelist, 1, shapesize, shapecounts, nshapetypes);
+        DBPutZonelist2(m_siloDb, zonelist_name.c_str(), nzones, ndims,
+            nodelist.data(), lnodelist, 1, 0, 0, shapetype, shapesize,
+            shapecounts, nshapetypes, NULL);
 
         if ( std::is_same<T, float>::value )
         {
             DBPutUcdmesh(m_siloDb, name.c_str(), ndims, NULL, coords, nnodes, nzones,
-                zonelist_name.c_str(), NULL, DB_FLOAT, NULL);
+                zonelist_name.c_str(), NULL, DB_FLOAT, m_optlist);
         }
 
         if ( std::is_same<T, double>::value )
         {
             DBPutUcdmesh(m_siloDb, name.c_str(), ndims, NULL, coords, nnodes, nzones,
-                zonelist_name.c_str(), NULL, DB_DOUBLE, NULL);
+                zonelist_name.c_str(), NULL, DB_DOUBLE, m_optlist);
         }
 
 
@@ -233,6 +263,18 @@ public:
                      var.size(), NULL, 0, DB_DOUBLE,
                      DB_ZONECENT, NULL);
 
+        return true;
+    }
+
+    bool add_expression(const std::string& expr_name,
+                        const std::string& expr_definition,
+                        int expr_type)
+    {
+        std::stringstream ss;
+        ss << "def_" << expr_name;
+        const char *name[] = { expr_name.c_str() };
+        const char *def[] = { expr_definition.c_str() };
+        DBPutDefvars(m_siloDb, ss.str().c_str(), 1, name, &expr_type, def, NULL);
         return true;
     }
 };

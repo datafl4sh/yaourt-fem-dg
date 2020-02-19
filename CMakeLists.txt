@@ -1,6 +1,6 @@
 cmake_minimum_required (VERSION 3.5)
 project (dg2d)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Additional modules path for cmake
@@ -37,6 +37,9 @@ add_subdirectory(tests)
 
 add_executable(dg2d dg2d.cpp)
 target_link_libraries(dg2d ${LINK_LIBS})
+
+add_executable(maxwell maxwell_driver.cpp)
+target_link_libraries(maxwell ${LINK_LIBS})
 
 add_executable(continuous_fem continuous_fem.cpp)
 target_link_libraries(continuous_fem ${LINK_LIBS})

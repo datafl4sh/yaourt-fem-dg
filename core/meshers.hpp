@@ -365,9 +365,9 @@ public:
 
 template<typename Mesh>
 auto
-get_mesher(const Mesh&)
+get_mesher(const Mesh&, bool verbose = false)
 {
-	return mesher<Mesh>(true);
+	return mesher<Mesh>(verbose);
 }
 
 } // namespace yaourt
