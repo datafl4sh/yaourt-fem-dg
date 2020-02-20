@@ -28,6 +28,10 @@
 #include "core/blaze_sparse_init.hpp"
 #include "core/dataio.hpp"
 
+
+#define LOGLEVEL_INFO(x)        (x > 0)
+#define LOGLEVEL_DETAIL(x)      (x > 1)
+
 namespace yaourt::maxwell_2D {
 
 enum class time_integrator_type {
@@ -91,6 +95,9 @@ struct maxwell_context
     /* Basis size*/
     size_t                      basis_size;
 
+    using no_pair_t = std::pair<size_t, bool>;
+    std::vector<no_pair_t>      offdiag_neigh_offsets;
+
     constexpr int faces_per_elem()
     {
         if (std::is_same<Mesh, yaourt::simplicial_mesh<T>>::value)
@@ -110,7 +117,7 @@ struct maxwell_context
         namespace yb = yaourt::bases;
 
         /* Create mesh */
-        auto mesher = yaourt::get_mesher(msh, (cfg.verbosity > 0));
+        auto mesher = yaourt::get_mesher(msh, LOGLEVEL_INFO(cfg.verbosity));
         mesher.create_mesh(msh, cfg.mesh_levels);
         msh.compute_connectivity();
 
@@ -130,6 +137,7 @@ struct maxwell_context
 
         gOp_ondiag.resize(num_gDofs, num_lDofs);
         gOp_offdiag.resize( faces_per_elem() * num_gDofs, num_lDofs );
+        offdiag_neigh_offsets.resize( faces_per_elem() * num_gDofs );
 
         mu_r.resize(msh.cells.size());      mu_r = 1.0;
         eps_r.resize(msh.cells.size());     eps_r = 1.0;
@@ -148,7 +156,7 @@ assemble(maxwell_context<Mesh>& ctx)
 
     auto basis_size = yb::scalar_basis_size(ctx.cfg.degree, 2);
 
-    if (ctx.cfg.verbosity > 0)
+    if ( LOGLEVEL_INFO(ctx.cfg.verbosity) )
     {
         size_t ndofs = 3*basis_size*ctx.msh.cells.size();
         std::cout << "Assembling dG operator, " << ndofs << " DoFs." << std::endl;
@@ -239,6 +247,7 @@ assemble(maxwell_context<Mesh>& ctx)
             if (nv.second)
             {   /* NOT on a boundary */
                 size_t neigh_ofs = offset(ctx.msh, ncl);
+                ctx.offdiag_neigh_offsets[offdiag_contrib_i] = std::make_pair(neigh_ofs, true);
 
                 /* Default use centered fluxes */
                 T kappa_E = 0.5;
@@ -303,7 +312,7 @@ assemble(maxwell_context<Mesh>& ctx)
             } /*end if (nv.second) */
             else
             {   /* On a boundary*/
-                
+                ctx.offdiag_neigh_offsets[offdiag_contrib_i] = std::make_pair(0, false);
                 /* Default use centered fluxes */
                 T kappa_E = 0.5;
                 T kappa_H = 0.5;
@@ -373,7 +382,7 @@ assemble(maxwell_context<Mesh>& ctx)
 
     auto asm_end_time = std::chrono::system_clock::now();
 
-    if (ctx.cfg.verbosity > 0)
+    if ( LOGLEVEL_INFO(ctx.cfg.verbosity) )
     {
         std::chrono::duration<double> asmtime = asm_end_time - asm_start_time;
         std::cout << "Assembly time: " << asmtime.count() << " seconds" << std::endl;
@@ -458,9 +467,9 @@ do_timestep(maxwell_context<Mesh>& ctx)
         for (auto& tcl : ctx.msh.cells)
         {
             get_dofs(v_next, cell_i) = get_ondiag(cell_i) * get_dofs(v, cell_i);
-            
-            /* This cycle on the faces is painfully slow, neighbours must be
-             * cached to make it efficient*/
+
+//#define BE_NAIVE
+#ifdef BE_NAIVE
             auto fcs = faces(ctx.msh, tcl);
             for (auto& fc : fcs)
             {
@@ -474,8 +483,18 @@ do_timestep(maxwell_context<Mesh>& ctx)
                 }
                 /* LAST */
                 offdiag_contrib_i++;
-            }           
-            
+            }
+#else
+            for (size_t fi = 0; fi < ctx.faces_per_elem(); fi++)
+            {
+                auto no = ctx.offdiag_neigh_offsets[offdiag_contrib_i];
+                if (no.second)
+                    get_dofs(v_next, cell_i) += get_offdiag(offdiag_contrib_i) * get_dofs(v, no.first);
+
+                /* LAST */
+                offdiag_contrib_i++;
+            }
+#endif
             /* LAST */
             cell_i++;
         }
@@ -514,7 +533,7 @@ do_timestep(maxwell_context<Mesh>& ctx)
 
     auto ts_end_time = std::chrono::system_clock::now();
 
-    if (ctx.cfg.verbosity > 1)
+    if ( LOGLEVEL_DETAIL(ctx.cfg.verbosity) )
     {
         std::chrono::duration<double> tstime = ts_end_time - ts_start_time;
         std::cout << "Timestep time: " << tstime.count() << " seconds" << std::endl;

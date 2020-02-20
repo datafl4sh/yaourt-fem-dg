@@ -206,7 +206,7 @@ run_maxwell_solver(const ymax::maxwell_config<typename Mesh::coordinate_type>& c
     };
 
     auto Ez_ref = [&](const point_type& pt, T t) -> auto {
-        return std::sin(m*M_PI*pt.x()) * std::sin(n*M_PI*pt.y()) * std::cos(omega*t) * pt.x();
+        return std::sin(m*M_PI*pt.x()) * std::sin(n*M_PI*pt.y()) * std::cos(omega*t);
     };
 
     /* Init solver context */
@@ -289,12 +289,13 @@ int main(int argc, char **argv)
         { "max-time",               required_argument,  NULL, 'T' },
         { "error-log",              required_argument,  NULL, 'E' },
         { "silo-basename",          required_argument,  NULL, 's' },
+        { "output-rate",            required_argument,  NULL, 'R' },
         { "use-upwind",             no_argument,        NULL, 'u' },
         { "verbose",                no_argument,        NULL, 'v' },
         { NULL,                     0,                  NULL,  0  }
     };
 
-    while ((ch = getopt_long(argc, argv, "m:r:k:i:d:t:T:E:s:uv", longopts, NULL)) != -1)
+    while ((ch = getopt_long(argc, argv, "m:r:k:i:d:t:T:E:s:R:uv", longopts, NULL)) != -1)
     {
         switch (ch)
         {
@@ -338,6 +339,10 @@ int main(int argc, char **argv)
 
             case 's':
                 cfg.silo_basename = optarg;
+                break;
+
+            case 'R':
+                cfg.output_rate = atoi(optarg);
                 break;
 
             case 'u':

@@ -32,6 +32,9 @@ class silo_database
     DBfile          *m_siloDb;
     DBoptlist       *m_optlist;
 
+    int             cycle;
+    double          time;
+
 public:
     silo_database()
         : m_siloDb(nullptr), m_optlist(nullptr)
@@ -85,13 +88,17 @@ public:
 
     template<typename T>
     bool
-    add_time(int cycle, T time)
+    add_time(int p_cycle, T p_time)
     {
         static_assert(std::is_same<T,double>::value, "Wrong type");
 
+        cycle = p_cycle;
+        time = p_time;
+
+        /* cycle and time must live at least until DBPutUcdMesh() */
         m_optlist = DBMakeOptlist(2);
-        DBAddOption(m_optlist, DBOPT_DTIME, &time);
         DBAddOption(m_optlist, DBOPT_CYCLE, &cycle);
+        DBAddOption(m_optlist, DBOPT_DTIME, &time);
 
         return true;
     }
