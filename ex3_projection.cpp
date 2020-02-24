@@ -1,7 +1,7 @@
 /*
  * Yaourt-FEM-DG - Yet AnOther Useful Resource for Teaching FEM and DG.
  *
- * Matteo Cicuttin (C) 2019
+ * Matteo Cicuttin (C) 2019-2020
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -69,6 +69,8 @@
 int main(int argc, char **argv)
 {
     using T = double;
+    namespace yb = yaourt::bases;
+    namespace yq = yaourt::quadratures;
 
     if (argc != 3)
     {
@@ -79,13 +81,13 @@ int main(int argc, char **argv)
     size_t      degree      = atoi(argv[1]);
     size_t      mesh_levels = atoi(argv[2]);
 
-    size_t      basis_size = dg2d::bases::scalar_basis_size(degree, 2);
+    size_t      basis_size = yb::scalar_basis_size(degree, 2);
 
     /* Declare a mesh object */
-    dg2d::simplicial_mesh<T> msh;
+    yaourt::simplicial_mesh<T> msh;
 
     /* Ask for a mesher */
-    auto mesher = dg2d::get_mesher(msh);
+    auto mesher = yaourt::get_mesher(msh);
 
     /* Mesh the domain */
     mesher.create_mesh(msh, mesh_levels);
@@ -107,10 +109,10 @@ int main(int argc, char **argv)
         blaze::DynamicVector<T> rhs(basis_size, 0.0);
 
         /* Ask for a basis on the current cell */
-        auto basis = dg2d::bases::make_basis(msh, cl, degree);
+        auto basis = yb::make_basis(msh, cl, degree);
 
         /* Ask for the quadrature */
-        auto qps = dg2d::quadratures::integrate(msh, cl, 2*degree);
+        auto qps = yq::integrate(msh, cl, 2*degree);
         for (auto& qp : qps)
         {
             auto phi = basis.eval(qp.point());
@@ -141,8 +143,8 @@ int main(int argc, char **argv)
         for (size_t i = 0; i < basis_size; i++) 
             sol[i] = proj[cl_num*basis_size + i];
 
-        auto basis = dg2d::bases::make_basis(msh, cl, degree);
-        auto qps = dg2d::quadratures::integrate(msh, cl, 2*degree+2);
+        auto basis = yb::make_basis(msh, cl, degree);
+        auto qps = yq::integrate(msh, cl, 2*degree+2);
         for (auto& qp : qps)
         {
             auto phi = basis.eval(qp.point());

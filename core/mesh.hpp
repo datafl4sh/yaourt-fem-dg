@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <tuple>
 
 #include <blaze/Math.h>
 
@@ -236,7 +237,7 @@ template<typename T>
 using quad_mesh = mesh<T, 2, quadrangle, edge>;
 
 template<typename Mesh>
-std::pair<typename Mesh::cell_type, bool>
+std::tuple<typename Mesh::cell_type, bool>
 neighbour_via(const Mesh& msh,
               const typename Mesh::cell_type& cl,
               const typename Mesh::face_type& fc)
@@ -255,9 +256,9 @@ neighbour_via(const Mesh& msh,
     assert(fo[0] == cl_ofs);
 
     if (fo[1] == NO_OWNER)
-        return std::make_pair(msh.cells[0], false);
+        return std::make_tuple(msh.cells[0], false);
 
-    return std::make_pair(msh.cells.at(fo[1]), true);
+    return std::make_tuple(msh.cells.at(fo[1]), true);
 }
 
 template<typename Mesh>

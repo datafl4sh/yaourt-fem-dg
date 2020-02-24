@@ -34,11 +34,11 @@ int main(void)
     using T = double;
 
     /* Declare a mesh object */
-    //dg2d::quad_mesh<T> msh;
-    dg2d::simplicial_mesh<T> msh;
+    //yaourt::quad_mesh<T> msh;
+    yaourt::simplicial_mesh<T> msh;
 
     /* Ask for a mesher */
-    auto mesher = dg2d::get_mesher(msh);
+    auto mesher = yaourt::get_mesher(msh);
 
     /* Mesh the domain */
     mesher.create_mesh(msh, 0);

@@ -226,8 +226,7 @@ assemble(maxwell_context<Mesh>& ctx)
         auto fcs = faces(ctx.msh, tcl);
         for (auto& fc : fcs)
         {
-            auto nv = neighbour_via(ctx.msh, tcl, fc);
-            auto ncl = nv.first;
+            auto [ncl, has_neighbour] = neighbour_via(ctx.msh, tcl, fc);
             auto nbasis = yb::make_basis(ctx.msh, ncl, ctx.cfg.degree);
             assert(tbasis.size() == nbasis.size());
 
@@ -244,7 +243,7 @@ assemble(maxwell_context<Mesh>& ctx)
                 return submatrix(M, offset_i, offset_j, basis_size, basis_size);
             };
 
-            if (nv.second)
+            if (has_neighbour)
             {   /* NOT on a boundary */
                 size_t neigh_ofs = offset(ctx.msh, ncl);
                 ctx.offdiag_neigh_offsets[offdiag_contrib_i] = std::make_pair(neigh_ofs, true);
@@ -309,7 +308,7 @@ assemble(maxwell_context<Mesh>& ctx)
                         get_block(FC_offdiag, 2, 2) -= -nu_E * inv_eps * nmass;             // Ez equation, [E]
                     }
                 } /* end for (auto& fqp : f_qps) */
-            } /*end if (nv.second) */
+            } /*end if (has_neighbour) */
             else
             {   /* On a boundary*/
                 ctx.offdiag_neigh_offsets[offdiag_contrib_i] = std::make_pair(0, false);
@@ -344,7 +343,7 @@ assemble(maxwell_context<Mesh>& ctx)
                     if (ctx.cfg.upwind)
                         get_block(FC_diag, 2, 2) += -2*nu_E * inv_eps * tmass;    // Ez equation, [E]
                 }
-            } /*end else (nv.second) */
+            } /*end else (has_neighbour) */
 
 
             for (size_t i = 0; i < 3; i++)
@@ -356,7 +355,7 @@ assemble(maxwell_context<Mesh>& ctx)
                 }
             }
 
-            if (nv.second)
+            if (has_neighbour)
             {   /* Save offdiag */
                 auto offdiag_base = 3*basis_size*offdiag_contrib_i;
 
@@ -460,12 +459,14 @@ do_timestep(maxwell_context<Mesh>& ctx)
         return submatrix(ctx.gOp_offdiag, offset, 0, size, size);
     };
 
+    // Total FLOPS: ((3*basis_size)^2)*(faces_per_elem+1)*ctx.msh.cells.size()
     auto apply_operator = [&](DynamicVector<T>& v, DynamicVector<T>& v_next) -> void {
         size_t cell_i = 0;
         size_t offdiag_contrib_i = 0;
 
         for (auto& tcl : ctx.msh.cells)
         {
+            // (3*basis_size)^2 FLOPS
             get_dofs(v_next, cell_i) = get_ondiag(cell_i) * get_dofs(v, cell_i);
 
 //#define BE_NAIVE
@@ -475,7 +476,7 @@ do_timestep(maxwell_context<Mesh>& ctx)
             {
                 auto nv = neighbour_via(ctx.msh, tcl, fc);
                 auto ncl = nv.first;
-                if (nv.second)
+                if (has_neighbour)
                 {
                     auto neigh_ofs = offset(ctx.msh, ncl);
                     get_dofs(v_next, cell_i) += get_offdiag(offdiag_contrib_i) * get_dofs(v, neigh_ofs);
@@ -485,6 +486,7 @@ do_timestep(maxwell_context<Mesh>& ctx)
                 offdiag_contrib_i++;
             }
 #else
+            // ((3*basis_size)^2)*faces_per_elem FLOPS
             for (size_t fi = 0; fi < ctx.faces_per_elem(); fi++)
             {
                 auto no = ctx.offdiag_neigh_offsets[offdiag_contrib_i];
@@ -519,16 +521,17 @@ do_timestep(maxwell_context<Mesh>& ctx)
 
         apply_operator(ctx.gDofs, k1);
 
-        ctx.gDofs_t_plus_one = ctx.gDofs + (ctx.cfg.delta_t/2.)*k1;
+        ctx.gDofs_t_plus_one = ctx.gDofs + (ctx.cfg.delta_t/2.)*k1; //(3*basis_size*msh.cells.size()) FLOPS
         apply_operator(ctx.gDofs_t_plus_one, k2);
         
-        ctx.gDofs_t_plus_one = ctx.gDofs + (ctx.cfg.delta_t/2.)*k2;
+        ctx.gDofs_t_plus_one = ctx.gDofs + (ctx.cfg.delta_t/2.)*k2; //(3*basis_size*msh.cells.size()) FLOPS
         apply_operator(ctx.gDofs_t_plus_one, k3);
         
-        ctx.gDofs_t_plus_one = ctx.gDofs + (ctx.cfg.delta_t)*k3;
+        ctx.gDofs_t_plus_one = ctx.gDofs + (ctx.cfg.delta_t)*k3;    //(3*basis_size*msh.cells.size()) FLOPS
         apply_operator(ctx.gDofs_t_plus_one, k4);
 
-        ctx.gDofs_t_plus_one = ctx.gDofs + (1./6.) * ctx.cfg.delta_t * (k1 + 2*k2 + 2*k3 + k4);
+        // 2 * (3*basis_size*msh.cells.size()) FLOPS
+        ctx.gDofs_t_plus_one = ctx.gDofs + ((1./6.) * ctx.cfg.delta_t) * (k1 + 2*(k2 + k3) + k4);
     }
 
     auto ts_end_time = std::chrono::system_clock::now();
@@ -536,7 +539,14 @@ do_timestep(maxwell_context<Mesh>& ctx)
     if ( LOGLEVEL_DETAIL(ctx.cfg.verbosity) )
     {
         std::chrono::duration<double> tstime = ts_end_time - ts_start_time;
-        std::cout << "Timestep time: " << tstime.count() << " seconds" << std::endl;
+        double time = tstime.count();
+        std::cout << "Timestep time: " << time << " seconds. ";
+
+        size_t totflops;
+        totflops  = 4*((3*basis_size)*(3*basis_size)*(ctx.faces_per_elem()+1))*ctx.msh.cells.size(); //operator evaluation
+        totflops += 5*(3*basis_size*ctx.msh.cells.size()); // RK4 vector-scalar multiplications
+
+        std::cout << "Estimated performance: " << double(totflops)/time << std::endl;
     }
 
     swap(ctx.gDofs_t_plus_one, ctx.gDofs);

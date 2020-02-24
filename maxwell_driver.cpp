@@ -17,8 +17,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/* This is the driver for the Maxwell solver. It implements a 2D transverse
+ * TM(z) solver (Hx, Hy, Ez).
+ * See Sec. 6.5 of "Nodal Discontinuous Galerkin - J.S.Hesthaven, T.Warburton"
+ */
+
 #include <iostream>
 #include <fstream>
+#include <cstring>
 #include <getopt.h>
 
 #include "methods/dg_maxwell_2D.hpp"
@@ -299,6 +305,7 @@ int main(int argc, char **argv)
     {
         switch (ch)
         {
+            /* Select mesh type */
             case 'm':
                 if ( strcmp(optarg, "quad") == 0 )
                     mt = mesh_type::QUADRANGULAR;
@@ -306,49 +313,65 @@ int main(int argc, char **argv)
                     mt = mesh_type::TRIANGULAR;
                 break;
 
+            /* Select number of mesh refinement levels */
             case 'r':
                 cfg.mesh_levels = atoi(optarg);
                 break;
 
+            /* Select polynomial order */
             case 'k':
                 cfg.degree = atoi(optarg);
                 break;
 
+            /* Select time integrator. If you use euler you're doing the
+             * wrong thing. Default is RK4. */
             case 'i':
                 if ( strcmp(optarg, "euler") == 0 )
                     cfg.time_integrator = ymax::time_integrator_type::EXPLICIT_EULER;
                 break;
             
+            /* Select timestepping delta-t */
             case 'd':
                 cfg.delta_t = atof(optarg);
                 break;
 
+            /* Total number of timesteps */
             case 't':
                 cfg.timesteps = atoi(optarg);
                 break;
 
+            /* Final time */
             case 'T': {
                 float maxtime = atof(optarg);
                 cfg.timesteps = (size_t) std::ceil(maxtime/cfg.delta_t);
                 }
                 break;
 
+            /* Specify filename where to dump error calculations */
             case 'E':
                 cfg.error_fn = optarg;
                 break;
 
+            /* Specify basename for output to Silo */
             case 's':
+#ifdef WITH_SILO
                 cfg.silo_basename = optarg;
+#else
+                std::cout << "Silo support not compiled" << std::endl;
+#endif
                 break;
 
+            /* Specify every how many timesteps to output data */
             case 'R':
                 cfg.output_rate = atoi(optarg);
                 break;
 
+            /* Enable upwind fluxes */
             case 'u':
                 cfg.upwind = true;
                 break;
 
+            /* Increase verbosity level */
             case 'v':
                 cfg.verbosity++;
                 break;

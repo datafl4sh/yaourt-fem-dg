@@ -11,7 +11,7 @@ set (CMAKE_MODULE_PATH
 
 #set(CMAKE_CXX_FLAGS_DEBUG "-g -fpermissive -fsanitize=address")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -fpermissive")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -fpermissive -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -fpermissive -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASEASSERT "-O3 -g -fpermissive")
 
 find_package(SILO)

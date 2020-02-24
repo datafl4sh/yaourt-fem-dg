@@ -27,14 +27,14 @@ compute_cell_errors(const Mesh& msh, size_t degree)
     T grad_err = 0.0;
     for (auto& cl : msh.cells)
     {
-        auto basis = dg2d::bases::make_basis(msh, cl, degree);
+        auto basis = yaourt::bases::make_basis(msh, cl, degree);
         auto basis_size = basis.size();
 
         blaze::DynamicMatrix<T> M(basis_size, basis_size, 0.0);
         blaze::DynamicMatrix<T> S(basis_size, basis_size, 0.0);
         blaze::DynamicVector<T> rhs(basis_size, 0.0);
 
-        auto qps = dg2d::quadratures::integrate(msh, cl, 2*degree+2);
+        auto qps = yaourt::quadratures::integrate(msh, cl, 2*degree+2);
         for (auto& qp : qps)
         {
             auto ep   = qp.point();
@@ -84,13 +84,13 @@ compute_face_error(const Mesh& msh, size_t degree)
     T fun_err = 0.0;
     for (auto& fc : msh.faces)
     {
-        auto basis = dg2d::bases::make_basis(msh, fc, degree);
+        auto basis = yaourt::bases::make_basis(msh, fc, degree);
         auto basis_size = basis.size();
 
         blaze::DynamicMatrix<T> M(basis_size, basis_size, 0.0);
         blaze::DynamicVector<T> rhs(basis_size, 0.0);
 
-        auto qps = dg2d::quadratures::integrate(msh, fc, 2*degree+2);
+        auto qps = yaourt::quadratures::integrate(msh, fc, 2*degree+2);
         for (auto& qp : qps)
         {
             auto ep   = qp.point();
@@ -121,7 +121,7 @@ void test_quadratures(Mesh& msh)
 {
     using T = typename Mesh::coordinate_type;
 
-    auto mesher = dg2d::get_mesher(msh);
+    auto mesher = yaourt::get_mesher(msh);
     mesher.create_mesh(msh, 0);
 
     T               prev_ferr;
@@ -150,11 +150,11 @@ int main(void)
 {
     using T = double;
 
-    //dg2d::simplicial_mesh<T> msh_s;
+    //yaourt::simplicial_mesh<T> msh_s;
     //shatter_mesh(msh_s, 0.15);
     //test_quadratures(msh_s);
 
-    dg2d::quad_mesh<T> msh_q;
+    yaourt::quad_mesh<T> msh_q;
     //shatter_mesh(msh_q, 0.15);
     test_quadratures(msh_q);
 

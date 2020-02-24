@@ -55,10 +55,10 @@ int main(void)
     size_t      quad_degree = 1;
 
     /* Declare a mesh object */
-    dg2d::quad_mesh<T> msh;
+    yaourt::quad_mesh<T> msh;
 
     /* Ask for a mesher */
-    auto mesher = dg2d::get_mesher(msh);
+    auto mesher = yaourt::get_mesher(msh);
 
     /* Mesh the domain */
     mesher.create_mesh(msh, mesh_levels);
@@ -71,7 +71,7 @@ int main(void)
     T int_val = 0.0;
     for (auto& cl : msh.cells)
     {
-        auto qps = dg2d::quadratures::integrate(msh, cl, quad_degree);
+        auto qps = yaourt::quadratures::integrate(msh, cl, quad_degree);
         for (auto& qp : qps)
             int_val += qp.weight() * f( qp.point() );
     }

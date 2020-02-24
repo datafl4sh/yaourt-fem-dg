@@ -213,8 +213,7 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
             blaze::DynamicMatrix<T> Att(tbasis.size(), tbasis.size(), 0.0);
             blaze::DynamicMatrix<T> Atn(tbasis.size(), tbasis.size(), 0.0);
 
-            auto nv = neighbour_via(msh, tcl, fc);
-            auto ncl = nv.first;
+            auto [ncl, has_neighbour] = neighbour_via(msh, tcl, fc);
             auto nbasis = yaourt::bases::make_basis(msh, ncl, degree);
             assert(tbasis.size() == nbasis.size());
 
@@ -228,7 +227,7 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
                 auto tphi   = tbasis.eval(ep);
                 auto tdphi  = tbasis.eval_grads(ep);
 
-                if (nv.second)
+                if (has_neighbour)
                 {   /* NOT on a boundary */
                     Att += + fqp.weight() * eta_l * tphi * trans(tphi);
                     Att += - fqp.weight() * 0.5 * tphi * trans(tdphi*n);
@@ -254,7 +253,7 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
             }
 
             assm.assemble(msh, tcl, tcl, Att);
-            if (nv.second)
+            if (has_neighbour)
                 assm.assemble(msh, tcl, ncl, Atn);
         }
 
@@ -412,8 +411,7 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
             blaze::DynamicMatrix<T> Att(tbasis.size(), tbasis.size(), 0.0);
             blaze::DynamicMatrix<T> Atn(tbasis.size(), tbasis.size(), 0.0);
 
-            auto nv = neighbour_via(msh, tcl, fc);
-            auto ncl = nv.first;
+            auto [ncl, has_neighbour] = neighbour_via(msh, tcl, fc);
             auto nbasis = yaourt::bases::make_basis(msh, ncl, degree);
             assert(tbasis.size() == nbasis.size());
 
@@ -434,7 +432,7 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
                 else
                     fi_coeff = beta_nf;
 
-                if (nv.second)
+                if (has_neighbour)
                 {   /* NOT on a boundary */
                     Att += - fqp.weight() * 0.5 * fi_coeff * tphi * trans(tphi);
                 }
@@ -456,7 +454,7 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
             }
 
             assm.assemble(msh, tcl, tcl, Att);
-            if (nv.second)
+            if (has_neighbour)
                 assm.assemble(msh, tcl, ncl, Atn);
         }
 
@@ -566,14 +564,10 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
     return status;
 }
 
-#include "dg2d_maxwell.hpp"
-
 enum class dg_problem
 {
     DIFFUSION,
     ADVECTION_REACTION,
-    MAXWELL_TE,
-    MAXWELL_TM
 };
 
 template<typename Mesh>
@@ -608,20 +602,6 @@ void run_dg(const dg_config<typename Mesh::coordinate_type>& cfg,
             status = run_advection_reaction_solver(msh, cfg);
             std::cout << status << std::endl;
             break;
-
-        case dg_problem::MAXWELL_TE:
-            std::cout << "Running dG Maxwell TE solver" << std::endl;
-            std::cout << "  degree: " << cfg.degree << std::endl;
-            status = run_maxwell_TE_solver(msh, cfg);
-            std::cout << status << std::endl;
-            break;
-
-        case dg_problem::MAXWELL_TM:
-            std::cout << "Running dG Maxwell TM solver" << std::endl;
-            std::cout << "  degree: " << cfg.degree << std::endl;
-            status = run_maxwell_TM_solver(msh, cfg);
-            std::cout << status << std::endl;
-            break;
     }
 }
 
@@ -647,28 +627,12 @@ int main(int argc, char **argv)
 
     cfg.shatter = false;
 
-    while ( (ch = getopt(argc, argv, "e:k:r:m:P:hpuSt:d:4E:")) != -1 )
+    while ( (ch = getopt(argc, argv, "E:e:k:r:m:P:pSuh")) != -1 )
     {
         switch(ch)
         {
             case 'E':
                 cfg.error_fn = optarg;
-                break;
-
-            case '4':
-                cfg.use_rk4 = true;
-                break;
-
-            case 's':
-                cfg.dumpsteps = atoi(optarg);
-                break;
-
-            case 'd':
-                cfg.delta_t = atof(optarg);
-                break;
-
-            case 't':
-                cfg.timesteps = atoi(optarg);
                 break;
 
             case 'e':
@@ -697,10 +661,6 @@ int main(int argc, char **argv)
                     dp = dg_problem::DIFFUSION;
                 else if ( strcmp(optarg, "adv-re") == 0 )
                     dp = dg_problem::ADVECTION_REACTION;
-                else if ( strcmp(optarg, "maxwell_TE") == 0 )
-                    dp = dg_problem::MAXWELL_TE;
-                else if ( strcmp(optarg, "maxwell_TM") == 0 )
-                    dp = dg_problem::MAXWELL_TM;
                 break;
 
             case 'p':
