@@ -154,6 +154,8 @@ init_from_triplets(CompressedMatrix<T>& M, ForwardIterator first,
         M.finalize(row);
 }
 
+/* Don't use BEGIN */
+//getrf/getrs don't give good solution
 template< typename T, bool SO, bool TF >
 const DynamicVector<T,TF>
 solve_LU(const DynamicMatrix<T,SO>& A, const DynamicVector<T,TF>& b)
@@ -185,6 +187,37 @@ solve_LU(const DynamicMatrix<T,SO>& A, const DynamicMatrix<T,SO>& B)
 
     return ret;
 }
+
+template< typename T, bool SO >
+class LU {
+
+    DynamicMatrix<T,SO>             At;
+    const std::unique_ptr<int[]>    ipiv;
+
+public:
+    LU(const DynamicMatrix<T,SO>& A)
+        : ipiv(new int[ A.rows() ])
+    {
+        At = A;
+        getrf( At, ipiv.get() );
+    }
+
+    DynamicMatrix<T,SO>
+    solve(const DynamicMatrix<T,SO>& rhs)
+    {
+        DynamicMatrix<T,SO> ret = rhs;
+        getrs( At, ret, 'N', ipiv.get() );
+        return ret;
+    }
+};
+
+template< typename T, bool SO >
+auto
+make_LU(const DynamicMatrix<T,SO>& A)
+{
+    return LU<T,SO>(A);
+}
+/* Don't use END */
 
 } // namespace blaze
 

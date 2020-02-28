@@ -459,14 +459,14 @@ do_timestep(maxwell_context<Mesh>& ctx)
         return submatrix(ctx.gOp_offdiag, offset, 0, size, size);
     };
 
-    // Total FLOPS: ((3*basis_size)^2)*(faces_per_elem+1)*ctx.msh.cells.size()
+    // Total FLOPS: (2*(3*basis_size)^2)*(faces_per_elem+1)*ctx.msh.cells.size()
     auto apply_operator = [&](DynamicVector<T>& v, DynamicVector<T>& v_next) -> void {
         size_t cell_i = 0;
         size_t offdiag_contrib_i = 0;
 
         for (auto& tcl : ctx.msh.cells)
         {
-            // (3*basis_size)^2 FLOPS
+            // 2*(3*basis_size)^2 FLOPS
             get_dofs(v_next, cell_i) = get_ondiag(cell_i) * get_dofs(v, cell_i);
 
 //#define BE_NAIVE
@@ -486,7 +486,7 @@ do_timestep(maxwell_context<Mesh>& ctx)
                 offdiag_contrib_i++;
             }
 #else
-            // ((3*basis_size)^2)*faces_per_elem FLOPS
+            // (2*(3*basis_size)^2)*faces_per_elem FLOPS
             for (size_t fi = 0; fi < ctx.faces_per_elem(); fi++)
             {
                 auto no = ctx.offdiag_neigh_offsets[offdiag_contrib_i];
@@ -521,16 +521,16 @@ do_timestep(maxwell_context<Mesh>& ctx)
 
         apply_operator(ctx.gDofs, k1);
 
-        ctx.gDofs_t_plus_one = ctx.gDofs + (ctx.cfg.delta_t/2.)*k1; //(3*basis_size*msh.cells.size()) FLOPS
+        ctx.gDofs_t_plus_one = ctx.gDofs + (ctx.cfg.delta_t/2.)*k1; //2*(3*basis_size*msh.cells.size()) FLOPS
         apply_operator(ctx.gDofs_t_plus_one, k2);
         
-        ctx.gDofs_t_plus_one = ctx.gDofs + (ctx.cfg.delta_t/2.)*k2; //(3*basis_size*msh.cells.size()) FLOPS
+        ctx.gDofs_t_plus_one = ctx.gDofs + (ctx.cfg.delta_t/2.)*k2; //2*(3*basis_size*msh.cells.size()) FLOPS
         apply_operator(ctx.gDofs_t_plus_one, k3);
         
-        ctx.gDofs_t_plus_one = ctx.gDofs + (ctx.cfg.delta_t)*k3;    //(3*basis_size*msh.cells.size()) FLOPS
+        ctx.gDofs_t_plus_one = ctx.gDofs + (ctx.cfg.delta_t)*k3;    //2*(3*basis_size*msh.cells.size()) FLOPS
         apply_operator(ctx.gDofs_t_plus_one, k4);
 
-        // 2 * (3*basis_size*msh.cells.size()) FLOPS
+        // 6 * (3*basis_size*msh.cells.size()) FLOPS
         ctx.gDofs_t_plus_one = ctx.gDofs + ((1./6.) * ctx.cfg.delta_t) * (k1 + 2*(k2 + k3) + k4);
     }
 
@@ -543,8 +543,8 @@ do_timestep(maxwell_context<Mesh>& ctx)
         std::cout << "Timestep time: " << time << " seconds. ";
 
         size_t totflops;
-        totflops  = 4*((3*basis_size)*(3*basis_size)*(ctx.faces_per_elem()+1))*ctx.msh.cells.size(); //operator evaluation
-        totflops += 5*(3*basis_size*ctx.msh.cells.size()); // RK4 vector-scalar multiplications
+        totflops  = 4*(2*(3*basis_size)*(3*basis_size)*(ctx.faces_per_elem()+1))*ctx.msh.cells.size(); //operator evaluation
+        totflops += 12*(3*basis_size*ctx.msh.cells.size()); // RK4 vector-scalar multiplications
 
         std::cout << "Estimated performance: " << double(totflops)/time << std::endl;
     }
