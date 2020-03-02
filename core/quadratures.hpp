@@ -48,7 +48,7 @@
 #include "core/point.hpp"
 #include "core/mesh.hpp"
 
-//#define USE_DUNAVANT
+#define USE_DUNAVANT
 
 namespace yaourt {
 namespace quadratures {
@@ -392,10 +392,10 @@ integrate(const simplicial_mesh<T>& msh,
           const typename simplicial_mesh<T>::cell_type& cl,
           size_t degree)
 {
-    if (degree > 16)
+    if (degree > 8)
         throw std::invalid_argument("Dunavant quadrature: degree too high");
 
-    size_t rule_num = degree/2;
+    size_t rule_num = (degree == 0) ? 0 : degree - 1;
 
     auto pts = points(msh, cl);
     auto meas = measure(msh, cl);

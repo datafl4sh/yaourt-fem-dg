@@ -146,17 +146,53 @@ void test_quadratures(Mesh& msh)
     }
 }
 
+template<typename Mesh>
+void
+test_quadratures_on_monomials(Mesh& msh)
+{
+    namespace yq = yaourt::quadratures;
+    namespace yb = yaourt::bases;
+
+    auto mesher = yaourt::get_mesher(msh);
+    mesher.create_mesh(msh, 0);
+
+    size_t max_degree = 8;
+
+    for (size_t m = 0; m <= max_degree; m++)
+    {
+        for (size_t n = 0; m+n <= max_degree; n++ )
+        {
+            auto expected = 1./((m+1)*(n+1));
+            auto computed = 0.0;
+            for (auto& cl : msh.cells)
+            {
+                auto qps = yq::integrate(msh, cl, m+n);
+                for (auto& qp : qps)
+                {
+                    auto ep = qp.point();
+                    auto ew = qp.weight();
+                    computed += ew * yb::iexp_pow(ep.x(), m) * yb::iexp_pow(ep.y(), n);
+                }
+            }
+
+            std::cout << "M = " << m << ", N = " << n << ", expected = ";
+            std::cout << expected << ", computed = " << computed << std::endl;
+        }
+    }
+}
+
 int main(void)
 {
     using T = double;
 
-    //yaourt::simplicial_mesh<T> msh_s;
+    yaourt::simplicial_mesh<T> msh_s;
     //shatter_mesh(msh_s, 0.15);
-    //test_quadratures(msh_s);
+    test_quadratures_on_monomials(msh_s);
 
-    yaourt::quad_mesh<T> msh_q;
+    //yaourt::quad_mesh<T> msh_q;
     //shatter_mesh(msh_q, 0.15);
-    test_quadratures(msh_q);
+    //test_quadratures(msh_q);
 
     return 0;
 }
+
