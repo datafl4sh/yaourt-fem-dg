@@ -28,6 +28,8 @@
 #include "core/blaze_sparse_init.hpp"
 #include "core/dataio.hpp"
 
+#include "core/refelem.hpp"
+
 
 #define LOGLEVEL_INFO(x)        (x > 0)
 #define LOGLEVEL_DETAIL(x)      (x > 1)
@@ -58,11 +60,13 @@ struct maxwell_config
     char *                  error_fn;       /* Error dump filename */
     char *                  silo_basename;  /* Base name for silo export */
 
+    bool                    shatter_mesh;
+
     maxwell_config() :
         degree(1), mesh_levels(4), timesteps(100), output_rate(10),
         delta_t(0.1), eta(1.0), verbosity(0), upwind(false),
         time_integrator(time_integrator_type::RUNGE_KUTTA_4),
-        error_fn(nullptr), silo_basename(nullptr)
+        error_fn(nullptr), silo_basename(nullptr), shatter_mesh(false)
     {}
 };
 
@@ -119,6 +123,71 @@ struct maxwell_context
         /* Create mesh */
         auto mesher = yaourt::get_mesher(msh, LOGLEVEL_INFO(cfg.verbosity));
         mesher.create_mesh(msh, cfg.mesh_levels);
+
+        if (cfg.shatter_mesh)
+            shatter_mesh(msh, 0.2);
+
+        msh.compute_connectivity();
+
+        /* Initialize data storage */
+        basis_size = yb::scalar_basis_size(cfg.degree, 2);
+
+        auto num_fDofs = basis_size * msh.cells.size();
+        auto num_gDofs = 3 * num_fDofs;
+        auto num_lDofs = 3 * basis_size;
+
+        gDofs.resize(num_gDofs); reset(gDofs);
+        gDofs_t_plus_one.resize(num_gDofs); reset(gDofs_t_plus_one);
+
+        gM.resize(num_fDofs, basis_size); reset(gM);
+        //gSx.resize(num_fDofs, basis_size);
+        //gSy.resize(num_fDofs, basis_size);
+
+        gOp_ondiag.resize(num_gDofs, num_lDofs); reset(gOp_ondiag);
+        gOp_offdiag.resize( faces_per_elem() * num_gDofs, num_lDofs ); reset(gOp_offdiag);
+        offdiag_neigh_offsets.resize( faces_per_elem() * num_gDofs );
+
+        mu_r.resize(msh.cells.size());      mu_r = 1.0;
+        eps_r.resize(msh.cells.size());     eps_r = 1.0;
+    }
+};
+
+#ifdef USE_REFERENCE_SIMPLEX
+template<typename T>
+struct maxwell_context<simplicial_mesh<T>>
+{
+    typedef simplicial_mesh<T>  mesh_type;
+
+    /* Configuration associated to this context */
+    maxwell_config<T>           cfg;
+
+    /* Mesh on which problem is solved */
+    mesh_type                   msh;
+
+    /* Global degrees of freedom */
+    blaze::DynamicVector<T>     gDofs, gDofs_t_plus_one;
+
+    /* Reference element matrices */
+    blaze::DynamicMatrix<T>     rM, rSeta, rSxi;
+    std::vector<yaourt::refelem::transform<T>>   gGeomCoeffs;
+
+    /* Material parameters */
+    T                           mu_0, eps_0;
+    blaze::DynamicVector<T>     mu_r, eps_r;
+
+    /* Basis size*/
+    size_t                      basis_size;
+
+    maxwell_context() = delete;
+
+    maxwell_context(const maxwell_config<T>& p_cfg) :
+        cfg(p_cfg), mu_0(4.*M_PI*1e-7), eps_0(8.8541878128e-12)
+    {
+        namespace yb = yaourt::bases;
+
+        /* Create mesh */
+        auto mesher = yaourt::get_mesher(msh, LOGLEVEL_INFO(cfg.verbosity));
+        mesher.create_mesh(msh, cfg.mesh_levels);
         msh.compute_connectivity();
 
         /* Initialize data storage */
@@ -131,18 +200,22 @@ struct maxwell_context
         gDofs.resize(num_gDofs);
         gDofs_t_plus_one.resize(num_gDofs);
 
-        gM.resize(num_fDofs, basis_size);
-        //gSx.resize(num_fDofs, basis_size);
-        //gSy.resize(num_fDofs, basis_size);
+        rM.resize(basis_size, basis_size); reset(rM);
+        rSeta.resize(basis_size, basis_size); reset(rSeta);
+        rSxi.resize(basis_size, basis_size); reset(rSxi);
 
-        gOp_ondiag.resize(num_gDofs, num_lDofs);
-        gOp_offdiag.resize( faces_per_elem() * num_gDofs, num_lDofs );
-        offdiag_neigh_offsets.resize( faces_per_elem() * num_gDofs );
+        gGeomCoeffs.reserve(msh.cells.size());
+
+        //gOp_ondiag.resize(num_gDofs, num_lDofs);
+        //gOp_offdiag.resize( faces_per_elem() * num_gDofs, num_lDofs );
+        //offdiag_neigh_offsets.resize( faces_per_elem() * num_gDofs );
 
         mu_r.resize(msh.cells.size());      mu_r = 1.0;
         eps_r.resize(msh.cells.size());     eps_r = 1.0;
     }
 };
+#endif /* USE_REFERENCE_SIMPLEX */
+
 
 template<typename Mesh>
 void
@@ -220,7 +293,6 @@ assemble(maxwell_context<Mesh>& ctx)
 
         get_global_ondiag_block(2, 0) = -inv_eps * invM2d_Sy;
         get_global_ondiag_block(2, 1) = +inv_eps * invM2d_Sx;
-
 
         /* Do numerical fluxes */
         auto fcs = faces(ctx.msh, tcl);
@@ -388,6 +460,46 @@ assemble(maxwell_context<Mesh>& ctx)
     }
 }
 
+#ifdef USE_REFERENCE_SIMPLEX
+template<typename T>
+void
+assemble(maxwell_context<simplicial_mesh<T>>& ctx)
+{
+    namespace yb = yaourt::bases;
+    namespace yq = yaourt::quadratures;
+    namespace yr = yaourt::refelem;
+
+    yr::reference_triangle<T> rt;
+
+    auto tbasis = yb::make_basis(rt, ctx.cfg.degree);
+    auto qps = yq::integrate(rt, 2*ctx.cfg.degree);
+    for (auto& qp : qps)
+    {
+        auto ep   = qp.point();
+        auto phi  = tbasis.eval(ep);
+        auto dphi = tbasis.eval_grads(ep);
+
+        auto dphi_eta = blaze::column<0>(dphi);
+        auto dphi_xi = blaze::column<1>(dphi);
+
+        /* Mass */
+        ctx.rM += qp.weight() * phi * trans( phi );
+        /* Stiffness, direction x */
+        ctx.rSeta += qp.weight() * phi * trans( dphi_eta );
+        /* Stiffness, direction y */
+        ctx.rSxi += qp.weight() * phi * trans( dphi_xi );
+    }
+
+    for (auto& cl : ctx.msh.cells)
+    {
+        auto cl_trans = yaourt::refelem::make_ref2phys_transform(ctx.msh, cl, rt);
+        ctx.gGeomCoeffs.push_back( inverse(cl_trans) );
+    }
+
+    assert(ctx.gGeomCoeffs.size() == ctx.msh.cells.size());
+}
+#endif /* USE_REFERENCE_SIMPLEX */
+
 template<typename Mesh>
 using ICF_type = std::function<typename Mesh::coordinate_type(const typename Mesh::point_type&, typename Mesh::coordinate_type)>;
 
@@ -432,6 +544,16 @@ apply_initial_condition(maxwell_context<Mesh>& ctx, const ICF_type<Mesh>& Hx_ic,
         cell_i++;
     }
 }
+
+#ifdef USE_REFERENCE_SIMPLEX
+template<typename T>
+void
+apply_initial_condition(maxwell_context<simplicial_mesh<T>>& ctx,
+                        const ICF_type<simplicial_mesh<T>>& Hx_ic,
+                        const ICF_type<simplicial_mesh<T>>& Hy_ic,
+                        const ICF_type<simplicial_mesh<T>>& Ez_ic)
+{}
+#endif /* USE_REFERENCE_SIMPLEX */
 
 template<typename Mesh>
 void
@@ -551,6 +673,13 @@ do_timestep(maxwell_context<Mesh>& ctx)
 
     swap(ctx.gDofs_t_plus_one, ctx.gDofs);
 }
+
+#ifdef USE_REFERENCE_SIMPLEX
+template<typename T>
+void
+do_timestep(maxwell_context<simplicial_mesh<T>>& ctx)
+{}
+#endif /* USE_REFERENCE_SIMPLEX */
 
 } // namespace yaourt::maxwell_2D
 

@@ -27,6 +27,9 @@
 #include <cstring>
 #include <getopt.h>
 
+#include <pmmintrin.h>
+#include <xmmintrin.h>
+
 #include "methods/dg_maxwell_2D.hpp"
 
 namespace ymax = yaourt::maxwell_2D;
@@ -277,6 +280,28 @@ enum class mesh_type  {
     HEXAHEDRAL
 };
 
+void usage(const char* progname)
+{
+    std::cout << "Usage: " << progname << " [options]" << std::endl << std::endl;
+
+    std::cout <<
+    "  -m, --mesh-type          'tri' for triangles, 'quad' for cartesian \n"
+    "  -r, --mesh-refinement    number of mesh refinement levels\n"
+    "  -k, --degree             polynomial degree (greater than 0)\n"
+    "  -i, --time-integrator    'euler' or 'rk4', rk4 default\n"
+    "  -d, --delta-t            timestep size\n"
+    "  -t, --timesteps          number of timesteps\n"
+    "  -T, --max-time           max simulation time\n"
+    "  -E, --error-log          output file for L2 error\n"
+    "  -s, --silo-basename      basename for silo output\n"
+    "  -R, --output-rate        timestep interval between outputs\n"
+    "  -u, --use-upwind         use upwind fluxes\n"
+    "  -v, --verbose            enable verbose output\n"
+    "  -S, --shatter-mesh       add random displacement to mesh points\n"
+    "  -h, --help               print this help\n"
+    << std::endl;
+}
+
 int main(int argc, char **argv)
 {
     using T = double;
@@ -290,7 +315,7 @@ int main(int argc, char **argv)
         { "mesh-refinement",        required_argument,  NULL, 'r' },
         { "degree",                 required_argument,  NULL, 'k' },
         { "time-integrator",        required_argument,  NULL, 'i' },
-        { "deltat",                 required_argument,  NULL, 'd' },
+        { "delta-t",                required_argument,  NULL, 'd' },
         { "timesteps",              required_argument,  NULL, 't' },
         { "max-time",               required_argument,  NULL, 'T' },
         { "error-log",              required_argument,  NULL, 'E' },
@@ -298,10 +323,20 @@ int main(int argc, char **argv)
         { "output-rate",            required_argument,  NULL, 'R' },
         { "use-upwind",             no_argument,        NULL, 'u' },
         { "verbose",                no_argument,        NULL, 'v' },
+        { "shatter-mesh",           no_argument,        NULL, 'S' },
+        { "help",                   no_argument,        NULL, 'h' },
         { NULL,                     0,                  NULL,  0  }
     };
 
-    while ((ch = getopt_long(argc, argv, "m:r:k:i:d:t:T:E:s:R:uv", longopts, NULL)) != -1)
+//#define DISALLOW_DENORMALS
+#ifdef DISALLOW_DENORMALS
+    _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+    _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+    std::cout << "Denormals: FTZ and DAZ" << std::endl;
+#endif
+    //_MM_SET_EXCEPTION_MASK(_MM_GET_EXCEPTION_MASK() & ~_MM_MASK_INVALID);
+
+    while ((ch = getopt_long(argc, argv, "m:r:k:i:d:t:T:E:s:R:uvSh", longopts, NULL)) != -1)
     {
         switch (ch)
         {
@@ -342,7 +377,7 @@ int main(int argc, char **argv)
 
             /* Final time */
             case 'T': {
-                float maxtime = atof(optarg);
+                double maxtime = atof(optarg);
                 cfg.timesteps = (size_t) std::ceil(maxtime/cfg.delta_t);
                 }
                 break;
@@ -376,11 +411,16 @@ int main(int argc, char **argv)
                 cfg.verbosity++;
                 break;
 
+            case 'S':
+                cfg.shatter_mesh = true;
+
             case 0:
                 break;
         
+            case 'h':
             default:
-                //usage();
+                usage( argv[0] );
+                return 1;
                 break;
         }
     }

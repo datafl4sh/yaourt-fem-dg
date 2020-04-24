@@ -20,7 +20,11 @@
 #ifdef WITH_SILO
 
 #include <silo.h>
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wconversion"
 #include <blaze/Math.h>
+#pragma clang diagnostic pop
 
 #include "mesh.hpp"
 
@@ -133,7 +137,7 @@ public:
                 nodelist.push_back( ptid + 1 ); /* SILO uses 1-based indices */
         }
 
-        int lnodelist = nodelist.size();
+        int lnodelist = int(nodelist.size());
 
         int shapetype[] = { DB_ZONETYPE_TRIANGLE };
         int shapesize[] = {3};
@@ -197,7 +201,7 @@ public:
                 nodelist.push_back( ptid + 1 ); /* SILO uses 1-based indices */
         }
 
-        int lnodelist = nodelist.size();
+        int lnodelist = int(nodelist.size());
 
         int shapetype[] = { DB_ZONETYPE_QUAD };
         int shapesize[] = {4};

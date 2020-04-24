@@ -203,7 +203,7 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
             auto phi  = tbasis.eval(ep);
             auto dphi = tbasis.eval_grads(ep);
 
-            K += qp.weight() * dphi * trans(dphi);
+            K += qp.weight() * phi * trans(phi);
             loc_rhs += qp.weight() * data::rhs(ep) * phi;
         }
 
@@ -220,7 +220,7 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
             auto n     = normal(msh, tcl, fc);
             auto eta_l = eta / diameter(msh, fc);
             auto f_qps = yaourt::quadratures::integrate(msh, fc, 2*degree);
-            
+            eta_l = 1;
             for (auto& fqp : f_qps)
             {
                 auto ep     = fqp.point();
@@ -230,17 +230,17 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
                 if (has_neighbour)
                 {   /* NOT on a boundary */
                     Att += + fqp.weight() * eta_l * tphi * trans(tphi);
-                    Att += - fqp.weight() * 0.5 * tphi * trans(tdphi*n);
-                    Att += - fqp.weight() * 0.5 * (tdphi*n) * trans(tphi);
+                    //Att += - fqp.weight() * 0.5 * tphi * trans(tdphi*n);
+                    //Att += - fqp.weight() * 0.5 * (tdphi*n) * trans(tphi);
                 }
                 else
                 {   /* On a boundary*/
                     Att += + fqp.weight() * eta_l * tphi * trans(tphi);
-                    Att += - fqp.weight() * tphi * trans(tdphi*n);
-                    Att += - fqp.weight() * (tdphi*n) * trans(tphi);
+                    //Att += - fqp.weight() * tphi * trans(tdphi*n);
+                    //Att += - fqp.weight() * (tdphi*n) * trans(tphi);
 
-                    loc_rhs -= fqp.weight() * data::dirichlet(ep) * (tdphi*n);
-                    loc_rhs += fqp.weight() * eta_l * data::dirichlet(ep) * tphi;
+                    //loc_rhs -= fqp.weight() * data::dirichlet(ep) * (tdphi*n);
+                    //loc_rhs += fqp.weight() * eta_l * data::dirichlet(ep) * tphi;
                     continue;
                 }
 
@@ -248,8 +248,8 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
                 auto ndphi  = nbasis.eval_grads(ep);
 
                 Atn += - fqp.weight() * eta_l * tphi * trans(nphi);
-                Atn += - fqp.weight() * 0.5 * tphi * trans(ndphi*n);
-                Atn += + fqp.weight() * 0.5 * (tdphi*n) * trans(nphi);
+                //Atn += - fqp.weight() * 0.5 * tphi * trans(ndphi*n);
+                //Atn += + fqp.weight() * 0.5 * (tdphi*n) * trans(nphi);
             }
 
             assm.assemble(msh, tcl, tcl, Att);
@@ -261,6 +261,13 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
     }
 
     assm.finalize();
+
+    blaze::DynamicVector<T> ones(msh.cells.size()*3);
+    ones.reset();
+    for (size_t i = 0; i < msh.cells.size()*3; i+= 3)
+        ones[i] = 1;
+
+    std::cout << trans(ones) * assm.lhs * ones << std::endl;
 
     /* SOLUTION PART */
     blaze::DynamicVector<T> sol(assm.system_size());

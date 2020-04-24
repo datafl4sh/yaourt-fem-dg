@@ -19,9 +19,13 @@
 
 #pragma once
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wconversion"
 #include <blaze/Math.h>
+#pragma clang diagnostic pop
 
-#include "mesh.hpp"
+#include "core/mesh.hpp"
+#include "core/refelem.hpp"
 
 namespace yaourt {
 namespace bases {
@@ -54,51 +58,46 @@ iexp_pow(T x, size_t n)
 }
 
 /* Compute the size of a scalar basis of degree k in dimension d. */
-size_t
+constexpr size_t
 scalar_basis_size(size_t k, size_t d)
 {
-    size_t num = 1;
-    size_t den = 1;
-
-    for (size_t i = 1; i <= d; i++)
-    {
-        num *= k + i;
-        den *= i;
-    }
-
-    return num / den;
+    if (d == 1)
+        return k+1;
+    if (d == 2)
+        return (k+2)*(k+1)/2;
+    if (d == 3)
+        return (k+3)*(k+2)*(k+1)/6;
+    
+    throw std::invalid_argument("d must be 1,2 or 3");
 }
 
-template<typename Mesh, typename Element>
-class scalar_basis;
+namespace detail {
 
-template<template<typename, size_t, typename, typename> class Mesh,
-         typename T, typename CellT, typename FaceT>
-class scalar_basis<Mesh<T,2,CellT,FaceT>, CellT>
+template<typename T, size_t DIM>
+class cell_basis_bones;
+
+template<typename T>
+class cell_basis_bones<T,2>
 {
-    typedef Mesh<T,2,CellT,FaceT>           mesh_type;
-    typedef CellT                           elem_type;
-    typedef typename mesh_type::point_type  point_type;
+    typedef point<T,2>      point_type;
 
-    point_type      elem_bar;
-    size_t          basis_degree, basis_size;
-    T               elem_h;
+    point_type              center;
+    T                       elem_h;
+    size_t                  basis_degree;
 
 public:
-    scalar_basis(const mesh_type& msh, const elem_type& elem, size_t degree)
-    {
-        elem_bar        = barycenter(msh, elem);
-        elem_h          = diameter(msh, elem);
-        basis_degree    = degree;
-        basis_size      = scalar_basis_size(degree, 2);
-    }
+    cell_basis_bones() = delete;
+    cell_basis_bones(const point_type& p_center, T p_elem_h, size_t p_degree)
+        : center(p_center), elem_h(p_elem_h), basis_degree(p_degree)
+    {}
 
     blaze::DynamicVector<T>
     eval(const point_type& pt) const
     {
+        size_t basis_size = scalar_basis_size(basis_degree, 2);
         blaze::DynamicVector<T> ret(basis_size);
 
-        const auto b = (pt - elem_bar) / (0.5*elem_h);
+        const auto b = (pt - center) / (0.5*elem_h);
 
         size_t pos = 0;
         for (size_t k = 0; k <= basis_degree; k++)
@@ -123,10 +122,11 @@ public:
     blaze::DynamicMatrix<T>
     eval_grads(const point_type& pt) const
     {
+        size_t basis_size = scalar_basis_size(basis_degree, 2);
         blaze::DynamicMatrix<T> ret(basis_size, 2);
 
         const auto ih = 2.0 / elem_h;
-        const auto b = (pt - elem_bar) / (0.5*elem_h);
+        const auto b = (pt - center) / (0.5*elem_h);
 
         size_t pos = 0;
         for (size_t k = 0; k <= basis_degree; k++)
@@ -155,7 +155,7 @@ public:
     size_t
     size() const
     {
-        return basis_size;
+        return scalar_basis_size(basis_degree, 2);
     }
 
     size_t
@@ -163,6 +163,25 @@ public:
     {
         return basis_degree;
     }
+};
+
+template<typename Mesh, typename Element>
+class scalar_basis;
+
+template<template<typename, size_t, typename, typename> class Mesh,
+         typename T, typename CellT, typename FaceT>
+class scalar_basis<Mesh<T,2,CellT,FaceT>, CellT>
+    : public cell_basis_bones<T,2>
+{
+    typedef Mesh<T,2,CellT,FaceT>           mesh_type;
+    typedef CellT                           elem_type;
+    typedef typename mesh_type::point_type  point_type;
+    typedef cell_basis_bones<T,2>           base;
+
+public:
+    scalar_basis(const mesh_type& msh, const elem_type& elem, size_t degree)
+        : base(barycenter(msh, elem), diameter(msh, elem), degree)
+    {}
 };
 
 #if 0
@@ -340,10 +359,34 @@ public:
     }
 };
 
+template<typename RefElem>
+class refelement_scalar_basis;
+
+template<typename T>
+class refelement_scalar_basis<refelem::reference_triangle<T>>
+    : public cell_basis_bones<T,2>
+{
+    typedef refelem::reference_triangle<T>  elem_type;
+    typedef cell_basis_bones<T,2>           base;
+public:
+    refelement_scalar_basis(const elem_type& elem, size_t degree)
+        : base(barycenter(elem), diameter(elem), degree)
+    {}
+};
+
+
+} // namespace detail
+
 template<typename Mesh, typename Element>
 auto make_basis(const Mesh& msh, const Element& elem, size_t degree)
 {
-    return scalar_basis<Mesh,Element>(msh, elem, degree);
+    return detail::scalar_basis<Mesh,Element>(msh, elem, degree);
+}
+
+template<typename RefElem>
+auto make_basis(const RefElem& elem, size_t degree)
+{
+    return detail::refelement_scalar_basis<RefElem>(elem, degree);
 }
 
 } // namespace bases

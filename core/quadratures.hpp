@@ -47,6 +47,7 @@
 
 #include "core/point.hpp"
 #include "core/mesh.hpp"
+#include "core/refelem.hpp"
 
 #define USE_DUNAVANT
 
@@ -356,6 +357,43 @@ triangle_quadrature_low_order(const point<T,2>& p0,
     return ret;
 }
 
+template<typename T>
+std::vector<quadrature_point<T,2>>
+triangle_quadrature_dunavant(const point<T,2>& p0,
+                             const point<T,2>& p1, 
+                             const point<T,2>& p2,
+                             size_t degree)
+{
+    if (degree > 8)
+        throw std::invalid_argument("Dunavant quadrature: degree too high");
+
+    size_t rule_num = (degree == 0) ? 0 : degree - 1;
+    assert(rule_num < 8);
+
+    auto v0 = p1 - p0;
+    auto v1 = p2 - p0;
+    auto area = std::abs( (v0.x() * v1.y() - v0.y() * v1.x())/2.0 );
+
+    auto num_points = detail::dunavant_rules[rule_num].num_points;
+
+    std::vector<quadrature_point<T,2>> ret;
+    ret.reserve(num_points);
+
+    for (size_t i = 0; i < num_points; i++)
+    {
+        auto l0 = detail::dunavant_rules[rule_num].data[i][0];
+        auto l1 = detail::dunavant_rules[rule_num].data[i][1];
+        auto l2 = detail::dunavant_rules[rule_num].data[i][2];
+        auto w = detail::dunavant_rules[rule_num].data[i][3];
+
+        auto qp = p0*l0 + p1*l1 + p2*l2;
+        auto qw = w*area;
+
+        ret.push_back({qp,qw});
+    }
+
+    return ret;
+}
 
 } // namespace detail
 
@@ -385,52 +423,31 @@ integrate(const Mesh& msh,
     return ret;
 }
 
+template<typename T>
+std::vector<quadrature_point<T,2>>
+integrate(const simplicial_mesh<T>& msh,
+          const typename simplicial_mesh<T>::cell_type& cl,
+          size_t degree)
+{
 #ifdef USE_DUNAVANT
-template<typename T>
-std::vector<quadrature_point<T,2>>
-integrate(const simplicial_mesh<T>& msh,
-          const typename simplicial_mesh<T>::cell_type& cl,
-          size_t degree)
-{
-    if (degree > 8)
-        throw std::invalid_argument("Dunavant quadrature: degree too high");
-
-    size_t rule_num = (degree == 0) ? 0 : degree - 1;
-
     auto pts = points(msh, cl);
-    auto meas = measure(msh, cl);
-
-    auto num_points = detail::dunavant_rules[rule_num].num_points;
-
-    std::vector<quadrature_point<T,2>> ret;
-    ret.reserve(num_points);
-
-    for (size_t i = 0; i < num_points; i++)
-    {
-        auto l0 = detail::dunavant_rules[rule_num].data[i][0];
-        auto l1 = detail::dunavant_rules[rule_num].data[i][1];
-        auto l2 = detail::dunavant_rules[rule_num].data[i][2];
-        auto w = detail::dunavant_rules[rule_num].data[i][3];
-
-        auto qp = pts[0]*l0 + pts[1]*l1 + pts[2]*l2;
-        auto qw = w*meas;
-
-        ret.push_back({qp,qw});
-    }
-
-    return ret;
-}
+    return detail::triangle_quadrature_dunavant(pts[0], pts[1], pts[2], degree);
 #else /* USE_DUNAVANT */
-template<typename T>
-std::vector<quadrature_point<T,2>>
-integrate(const simplicial_mesh<T>& msh,
-          const typename simplicial_mesh<T>::cell_type& cl,
-          size_t degree)
-{
     auto pts = points(msh, cl);
     return detail::triangle_quadrature_low_order(pts[0], pts[1], pts[2], degree);
-}
 #endif /* USE_DUNAVANT */
+}
+
+template<typename T>
+std::vector<quadrature_point<T,2>>
+integrate(const refelem::reference_triangle<T>& t,
+          size_t degree)
+{
+    return detail::triangle_quadrature_dunavant(t.points[0],
+                                                t.points[1],
+                                                t.points[2],
+                                                degree);
+}
 
 /* Quadrature for cartesian quadrangles, it is just tensorized Gauss points. */
 template<typename T>

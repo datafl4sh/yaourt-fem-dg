@@ -61,7 +61,7 @@ public:
         rhs.resize( sys_size );
         pc.resize( sys_size, sys_size );
         pc_temp = blaze::DynamicVector<T>(sys_size, 0.0);
-        build_pc = true;
+        build_pc = bpc;
     }
 
     bool assemble(const Mesh& msh,

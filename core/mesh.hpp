@@ -25,7 +25,10 @@
 #include <cmath>
 #include <tuple>
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wconversion"
 #include <blaze/Math.h>
+#pragma clang diagnostic pop
 
 #include "point.hpp"
 
@@ -92,7 +95,7 @@ struct edge
     bool    is_boundary, is_broken;
     size_t  boundary_id;
 
-    auto point_ids() const { return std::array<size_t,2>({p0, p1}); }
+    auto point_ids() const { return std::array<size_t,2>({{p0, p1}}); }
 };
 
 
@@ -101,7 +104,7 @@ struct triangle
     triangle() {}
 
     triangle(size_t ap0, size_t ap1, size_t ap2)
-        : p{ap0, ap1, ap2}
+        : p{{ap0, ap1, ap2}}
     {
         //std::sort(p.begin(), p.end());
     }
@@ -126,7 +129,7 @@ struct quadrangle
     quadrangle() {}
 
     quadrangle(size_t ap0, size_t ap1, size_t ap2, size_t ap3)
-        : p{ap0, ap1, ap2, ap3}
+        : p{{ap0, ap1, ap2, ap3}}
     {
         //std::sort(p.begin(), p.end());
     }
@@ -147,7 +150,7 @@ struct quadrangle
     auto point_ids() const { return p; }
 };
 
-#define NO_OWNER (~0)
+#define NO_OWNER (size_t(~0))
 
 template<typename T, size_t DIM, typename CellT, typename FaceT>
 class mesh;
@@ -281,7 +284,7 @@ offset(const Mesh& msh, const typename Mesh::face_type& fc)
     if (itor == msh.faces.end())
         throw std::invalid_argument("Mesh face not found");
 
-    return std::distance(msh.faces.begin(), itor);
+    return size_t(std::distance(msh.faces.begin(), itor));
 }
 
 template<typename T>

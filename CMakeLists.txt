@@ -9,6 +9,8 @@ set (CMAKE_MODULE_PATH
      ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 
+set(CMAKE_CXX_FLAGS "-Wall -Wconversion -Wno-sign-conversion -Wno-unused-variable -Wno-shorten-64-to-32")
+
 #set(CMAKE_CXX_FLAGS_DEBUG "-g -fpermissive -fsanitize=address")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -fpermissive")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -fpermissive -DNDEBUG")
