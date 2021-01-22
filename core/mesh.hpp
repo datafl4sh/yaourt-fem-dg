@@ -225,6 +225,9 @@ public:
     {}
 };
 
+/* Ask if a certain face is on the boundary of the domain.
+ * Takes a mesh and a face, returns a bool.
+ */
 template<template<typename, size_t, typename, typename> class Mesh,
          typename T, typename CellT, typename FaceT>
 bool is_boundary(const Mesh<T, 2, CellT, FaceT>& msh,
@@ -239,6 +242,10 @@ using simplicial_mesh = mesh<T, 2, triangle, edge>;
 template<typename T>
 using quad_mesh = mesh<T, 2, quadrangle, edge>;
 
+/* Ask for the neighbour of an element via a specific face.
+ * Takes a mesh, a cell and one of the faces of the cell.
+ * Returns a pair, second element is true if the neighbour
+ * exists, first element is the actual neighbour */
 template<typename Mesh>
 std::tuple<typename Mesh::cell_type, bool>
 neighbour_via(const Mesh& msh,
@@ -264,6 +271,7 @@ neighbour_via(const Mesh& msh,
     return std::make_tuple(msh.cells.at(fo[1]), true);
 }
 
+/* Return the global number of a given cell */
 template<typename Mesh>
 size_t
 offset(const Mesh& msh, const typename Mesh::cell_type& cl)
@@ -275,7 +283,7 @@ offset(const Mesh& msh, const typename Mesh::cell_type& cl)
     return std::distance(msh.cells.begin(), itor);
 }
 
-
+/* Return the global number of a given face */
 template<typename Mesh>
 size_t
 offset(const Mesh& msh, const typename Mesh::face_type& fc)
@@ -287,6 +295,7 @@ offset(const Mesh& msh, const typename Mesh::face_type& fc)
     return size_t(std::distance(msh.faces.begin(), itor));
 }
 
+/* Return all the faces of a cell, simplicial case */
 template<typename T>
 std::array<typename simplicial_mesh<T>::face_type, 3>
 faces(const simplicial_mesh<T>& msh, const typename simplicial_mesh<T>::cell_type& cell)
@@ -300,6 +309,7 @@ faces(const simplicial_mesh<T>& msh, const typename simplicial_mesh<T>::cell_typ
     return ret;
 }
 
+/* Return all the faces of a cell, cartesian case */
 template<typename T>
 std::array<typename quad_mesh<T>::face_type, 4>
 faces(const quad_mesh<T>& msh, const typename quad_mesh<T>::cell_type& cell)
@@ -342,6 +352,7 @@ face_ids(const quad_mesh<T>& msh, const typename quad_mesh<T>::cell_type& cell)
     return ret;
 }
 
+/* Return the points of a face, simplicial case */
 template<typename T>
 std::array<point<T,2>, 2>
 points(const simplicial_mesh<T>& msh,
@@ -355,7 +366,7 @@ points(const simplicial_mesh<T>& msh,
     return ret;
 }
 
-
+/* Return the points of a cell, simplicial case */
 template<typename T>
 std::array<point<T,2>, 3>
 points(const simplicial_mesh<T>& msh,
@@ -368,6 +379,7 @@ points(const simplicial_mesh<T>& msh,
     return ret;
 }
 
+/* Return the points of a face, cartesian case */
 template<typename T>
 std::array<point<T,2>, 2>
 points(const quad_mesh<T>& msh,
@@ -381,6 +393,7 @@ points(const quad_mesh<T>& msh,
     return ret;
 }
 
+/* Return the points of a cell, cartesian case */
 template<typename T>
 std::array<point<T,2>, 4>
 points(const quad_mesh<T>& msh,
@@ -395,6 +408,8 @@ points(const quad_mesh<T>& msh,
     return ret;
 }
 
+
+/* Return the barycenter of a face */
 template<template<typename, size_t, typename, typename> class Mesh,
          typename T, typename CellT, typename FaceT>
 typename Mesh<T,2,CellT,FaceT>::point_type
@@ -405,6 +420,7 @@ barycenter(const Mesh<T,2,CellT,FaceT>& msh,
     return (pts[0] + pts[1]) / 2.0;
 }
 
+/* Return the barycenter of a cell, simplicial case */
 template<typename T>
 typename simplicial_mesh<T>::point_type
 barycenter(const simplicial_mesh<T>& msh,
@@ -414,7 +430,7 @@ barycenter(const simplicial_mesh<T>& msh,
     return (pts[0] + pts[1] + pts[2]) / 3.0;
 }
 
-
+/* Return the barycenter of a cell, cartesian case */
 template<typename T>
 typename quad_mesh<T>::point_type
 barycenter(const quad_mesh<T>& msh,
@@ -424,6 +440,7 @@ barycenter(const quad_mesh<T>& msh,
     return (pts[0] + pts[1] + pts[2]+ pts[3]) / 4.0;
 }
 
+/* Return the area of a cell */
 template<template<typename, size_t, typename, typename> class Mesh,
          typename T, typename CellT, typename FaceT>
 T
@@ -442,6 +459,7 @@ measure(const Mesh<T,2,CellT,FaceT>& msh, const CellT& cl)
     return acc;
 }
 
+/* Return the length of a face */
 template<template<typename, size_t, typename, typename> class Mesh,
          typename T, typename CellT, typename FaceT>
 T
@@ -452,6 +470,7 @@ measure(const Mesh<T,2,CellT,FaceT>& msh, const FaceT& fc)
     return distance(pts[0], pts[1]);
 }
 
+/* Return the diameter of an element */
 template<typename Mesh, typename Element>
 typename Mesh::coordinate_type
 diameter(const Mesh& msh, const Element& elem)
@@ -467,6 +486,7 @@ diameter(const Mesh& msh, const Element& elem)
     return diam;
 }
 
+/* Return the average element diameter */ 
 template<typename Mesh>
 typename Mesh::coordinate_type
 diameter(const Mesh& msh)
@@ -481,6 +501,7 @@ diameter(const Mesh& msh)
     return diam;
 }
 
+/* Compute the outward normal on the face 'fc' belonging to cell 'cl' */
 template<template<typename, size_t, typename, typename> class Mesh,
          typename T, typename CellT, typename FaceT>
 blaze::StaticVector<T,2>
@@ -640,5 +661,11 @@ describe(const Mesh& msh, const typename Mesh::cell_type& cl)
     }
 }
 
+enum class meshtype  {
+    TRIANGULAR,
+    QUADRANGULAR,
+    TETRAHEDRAL,
+    HEXAHEDRAL
+};
 
 } //namespace yaourt

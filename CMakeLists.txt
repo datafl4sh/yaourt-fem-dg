@@ -9,7 +9,7 @@ set (CMAKE_MODULE_PATH
      ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 
-set(CMAKE_CXX_FLAGS "-Wall -Wconversion -Wno-sign-conversion -Wno-unused-variable -Wno-shorten-64-to-32")
+#set(CMAKE_CXX_FLAGS "-Wall -Wconversion -Wno-sign-conversion -Wno-unused-variable -Wno-shorten-64-to-32")
 
 #set(CMAKE_CXX_FLAGS_DEBUG "-g -fpermissive -fsanitize=address")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -fpermissive")
@@ -37,14 +37,17 @@ add_subdirectory(blaze)
 
 add_subdirectory(tests)
 
-add_executable(dg2d dg2d.cpp)
-target_link_libraries(dg2d ${LINK_LIBS})
+add_executable(dg2d_advection dg2d_advection.cpp)
+target_link_libraries(dg2d_advection ${LINK_LIBS})
 
-add_executable(maxwell maxwell_driver.cpp)
-target_link_libraries(maxwell ${LINK_LIBS})
+add_executable(dg2d_diffusion dg2d_diffusion.cpp)
+target_link_libraries(dg2d_diffusion ${LINK_LIBS})
 
-add_executable(continuous_fem continuous_fem.cpp)
-target_link_libraries(continuous_fem ${LINK_LIBS})
+#add_executable(maxwell maxwell_driver.cpp)
+#target_link_libraries(maxwell ${LINK_LIBS})
+
+#add_executable(continuous_fem continuous_fem.cpp)
+#target_link_libraries(continuous_fem ${LINK_LIBS})
 
 #add_executable(test_quad test_quad.cpp)
 #target_link_libraries(test_quad ${LINK_LIBS})

@@ -9,9 +9,10 @@ This code currently implements
 
 To install:
 
- * `git clone https://github.com/datafl4sh/Yaourt-FEM/`
- * `cd Yaourt-FEM`
- * `git clone https://bitbucket.org/blaze-lib/blaze.git`
- * `cmake .`
+ * `git clone --recursive https://github.com/datafl4sh/yaourt-fem-dg/`
+ * `cd yaourt-fem-dg`
+ * `mkdir build`
+ * `cd build`
+ * `cmake ..`
  * `make -j`
 

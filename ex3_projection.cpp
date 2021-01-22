@@ -92,19 +92,21 @@ int main(int argc, char **argv)
     /* Mesh the domain */
     mesher.create_mesh(msh, mesh_levels);
 
-    /* Define the function to integrate */
+    /* Define the function to project */
     auto f = [](const point<T,2>& pt) -> T {
         return std::sin(M_PI * pt.x());
     };
 
     blaze::DynamicVector<T> proj(msh.cells.size() * basis_size);
 
-    /* Loop on all the cells */
+    /* Problem "assembly". Here you would assemble the matrix and the RHS
+     * of the global linear system but, as the system here is block-diagonal
+     * we can simply solve element-by-element and store the local result in
+     * a global solution array */
     for (auto& cl : msh.cells)
     {
-        auto cl_num = offset(msh, cl);
-
         /* Prepare to solve (u,v) = (f,v) on each cell */
+        /* Initialize matrices */
         blaze::DynamicMatrix<T> M(basis_size, basis_size, 0.0);
         blaze::DynamicVector<T> rhs(basis_size, 0.0);
 
@@ -115,40 +117,48 @@ int main(int argc, char **argv)
         auto qps = yq::integrate(msh, cl, 2*degree);
         for (auto& qp : qps)
         {
-            auto phi = basis.eval(qp.point());
-            
-            M   += qp.weight() * phi * trans(phi);      // Mass matrix
-            rhs += qp.weight() * f(qp.point()) * phi;   // RHS
+            auto phi = basis.eval(qp.point());          /* Evaluate basis */
+
+            M   += qp.weight() * phi * trans(phi);      /* Build mass matrix */
+            rhs += qp.weight() * f(qp.point()) * phi;   /* Build RHS */
         }
 
-        auto sol = blaze::solve_LU(M, rhs);             // Solve M*sol = rhs
+        auto proj_loc = blaze::solve_LU(M, rhs);        /* Solve M*sol = rhs */
 
-        for (size_t i = 0; i < basis_size; i++)         // Store the solution
-            proj[cl_num*basis_size + i] = sol[i];
+        auto cl_num = offset(msh, cl);
+        for (size_t i = 0; i < basis_size; i++)         /* Store the solution */
+            proj[cl_num*basis_size + i] = proj_loc[i];
     }
+
+    /* At this point 'proj' contains the global solution of the problem
+     * (u_h, v_h) = (f, v_h). */
 
     /* Hints:
      *  - Fill 'sol' with the appropriate values of 'proj'
-     *  - Once 'sol' is filled, you can use 'dot(sol, phi)' to get the
+     *  - Once 'sol' is filled, you can use 'dot(proj_loc, phi)' to get the
      *    value of the solution at your quadrature point
      *  - Remember to use a quadrature of degree 2k+2
      */
-    
+
+    /* Postprocessing */
     T L2_errsq = 0.0;
     for (auto& cl : msh.cells)
     {
         auto cl_num = offset(msh, cl);
 
-        blaze::DynamicVector<T> sol(basis_size);
+        /* (1) Recover element-local solution */
+        blaze::DynamicVector<T> proj_loc(basis_size);
         for (size_t i = 0; i < basis_size; i++) 
-            sol[i] = proj[cl_num*basis_size + i];
+            proj_loc[i] = proj[cl_num*basis_size + i];
 
         auto basis = yb::make_basis(msh, cl, degree);
         auto qps = yq::integrate(msh, cl, 2*degree+2);
         for (auto& qp : qps)
         {
+            /* (2) Evaluate local solution and reference solution at quadrature
+             * points, then compute L2-error */
             auto phi = basis.eval(qp.point());
-            auto c_val = dot(sol, phi);
+            auto c_val = dot(proj_loc, phi);
             auto r_val = f(qp.point());
 
             L2_errsq += qp.weight() * (c_val-r_val) * (c_val-r_val);

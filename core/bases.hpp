@@ -58,7 +58,7 @@ iexp_pow(T x, size_t n)
 }
 
 /* Compute the size of a scalar basis of degree k in dimension d. */
-constexpr size_t
+size_t
 scalar_basis_size(size_t k, size_t d)
 {
     if (d == 1)

@@ -134,7 +134,7 @@ public:
         {
             for(size_t i = 0; i < pc_temp.size(); i++)
             {
-                assert( std::abs(pc_temp[i]) > 1e-2 );
+                //assert( std::abs(pc_temp[i]) > 1e-2 );
                 pc_triplets.push_back({i,i,1.0/pc_temp[i]});
             }
 

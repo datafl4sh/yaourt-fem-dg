@@ -286,7 +286,11 @@ bicgstab(const conjugated_gradient_params<T>& cgp,
     blaze::DynamicVector<T> r(N), r0(N), p(N, 0.0), v(N, 0.0);
     blaze::DynamicVector<T> s(N), t(N);
 
-    r0 = r = b - A*x;
+    if (cgp.use_normal_eqns)
+        r0 = r = trans(A)*(b - A*x);
+    else
+        r0 = r = b - A*x;
+
     nr = nr0 = norm(r);
 
     std::ofstream iter_hist_ofs;
@@ -311,19 +315,30 @@ bicgstab(const conjugated_gradient_params<T>& cgp,
         rho = dot(r,r0);
         if ( std::abs(rho) < 1e-9 )
         {
-            r = b - A*x;
+            if (cgp.use_normal_eqns)
+                r = b - trans(A)*A*x;
+            else
+                r = b - A*x;
             r0 = r;
             rho = dot(r,r0);
         }
 
         T beta = (rho/rho_old)*(alpha/omega);
         p = r + beta * (p - omega*v);
-        v = A*p;
+
+        if (cgp.use_normal_eqns)
+            v = trans(A)*A*p;
+        else
+            v = A*p;
+
         alpha = rho / dot(v, r0);
         s = r - alpha*v;
-        t = A*s;
 
-        //T nt = dot(t,t);
+        if (cgp.use_normal_eqns)
+            t = trans(A)*A*s;
+        else
+            t = A*s;
+
         omega = dot(t,s)/dot(t,t);
 
         x = x + alpha * p + omega * s;

@@ -51,8 +51,8 @@ int main(void)
 {
     using T = double;
 
-    size_t      mesh_levels = 3;
-    size_t      quad_degree = 1;
+    size_t      mesh_levels = 3;    /* Number of refinements of the base mesh */
+    size_t      quad_degree = 1;    /* Quadrature order to use */
 
     /* Declare a mesh object */
     yaourt::quad_mesh<T> msh;
@@ -72,7 +72,7 @@ int main(void)
     for (auto& cl : msh.cells)
     {
         auto qps = yaourt::quadratures::integrate(msh, cl, quad_degree);
-        for (auto& qp : qps)
+        for (auto& qp : qps) /* Compute the weighted sum */
             int_val += qp.weight() * f( qp.point() );
     }
 
