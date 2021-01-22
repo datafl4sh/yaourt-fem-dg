@@ -170,9 +170,9 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
 
                 if (has_neighbour)
                 {   /* NOT on a boundary */
-                    Att += + fqp.weight() * eta_l * tphi * trans(tphi);     // [u][v]
+                    Att += /* FILL WITH THE CORRECT TERM */                 // [u][v]
                     Att += - fqp.weight() * 0.5 * tphi * trans(tdphi*n);    // {grad(u).n}[v]
-                    Att += - fqp.weight() * 0.5 * (tdphi*n) * trans(tphi);  // [u]{grad(v).n}
+                    Att += /* FILL WITH THE CORRECT TERM */                 // [u]{grad(v).n}
                 }
                 else
                 {   /* On a boundary*/
@@ -188,9 +188,9 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
                 auto nphi   = nbasis.eval(ep);
                 auto ndphi  = nbasis.eval_grads(ep);
 
-                Atn += - fqp.weight() * eta_l * tphi * trans(nphi);         // [u][v]
+                Atn += /* FILL WITH THE CORRECT TERM */                     // [u][v]
                 Atn += - fqp.weight() * 0.5 * tphi * trans(ndphi*n);        // {grad(u).n}[v]
-                Atn += + fqp.weight() * 0.5 * (tdphi*n) * trans(nphi);      // [u]{grad(v).n}
+                Atn += /* FILL WITH THE CORRECT TERM */                     // [u]{grad(v).n}
             }
 
             assm.assemble(msh, tcl, tcl, Att);
