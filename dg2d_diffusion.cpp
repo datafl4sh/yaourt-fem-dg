@@ -170,27 +170,24 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
 
                 if (has_neighbour)
                 {   /* NOT on a boundary */
-                    Att += + fqp.weight() * eta_l * tphi * trans(tphi);     // [u][v]
                     Att += - fqp.weight() * 0.5 * tphi * trans(tdphi*n);    // {grad(u).n}[v]
-                    Att += - fqp.weight() * 0.5 * (tdphi*n) * trans(tphi);  // [u]{grad(v).n}
+                    /* Add symmetry and consistency */
                 }
                 else
                 {   /* On a boundary*/
-                    Att += + fqp.weight() * eta_l * tphi * trans(tphi);     // [u][v]
                     Att += - fqp.weight() * tphi * trans(tdphi*n);          // {grad(u).n}[v]
-                    Att += - fqp.weight() * (tdphi*n) * trans(tphi);        // [u]{grad(v).n}
+                    /* Add symmetry and consistency */
 
-                    loc_rhs -= fqp.weight() * data::dirichlet(ep) * (tdphi*n);
-                    loc_rhs += fqp.weight() * eta_l * data::dirichlet(ep) * tphi;
+                    /* Add boundary conditions */
                     continue;
                 }
 
                 auto nphi   = nbasis.eval(ep);
                 auto ndphi  = nbasis.eval_grads(ep);
 
-                Atn += - fqp.weight() * eta_l * tphi * trans(nphi);         // [u][v]
                 Atn += - fqp.weight() * 0.5 * tphi * trans(ndphi*n);        // {grad(u).n}[v]
-                Atn += + fqp.weight() * 0.5 * (tdphi*n) * trans(nphi);      // [u]{grad(v).n}
+                /* Add symmetry and consistency */
+
             }
 
             assm.assemble(msh, tcl, tcl, Att);
