@@ -52,7 +52,7 @@ int main(void)
     using T = double;
 
     size_t      mesh_levels = 3;    /* Number of refinements of the base mesh */
-    size_t      quad_degree = 1;    /* Quadrature order to use */
+    size_t      quad_degree = 6;    /* Quadrature order to use */
 
     /* Declare a mesh object */
     yaourt::quad_mesh<T> msh;
@@ -63,20 +63,28 @@ int main(void)
     /* Mesh the domain */
     mesher.create_mesh(msh, mesh_levels);
 
-    /* Define the function to integrate */
-    auto f = [](const point<T,2>& pt) -> T {
-        return std::sin(M_PI * pt.x());
-    };
-
-    T int_val = 0.0;
-    for (auto& cl : msh.cells)
+    for (size_t i = 0; i < 3; i++)
     {
-        auto qps = yaourt::quadratures::integrate(msh, cl, quad_degree);
-        for (auto& qp : qps) /* Compute the weighted sum */
-            int_val += qp.weight() * f( qp.point() );
+        for (size_t j = 0; j < 3; j++)
+        {
+            /* Define the function to integrate */
+            auto f = [&](const point<T,2>& pt) -> T {
+                return std::pow(pt.x(), i)*std::pow(pt.y(), j);
+            };
+
+            T int_val = 0.0;
+            for (auto& cl : msh.cells)
+            {
+                auto qps = yaourt::quadratures::integrate(msh, cl, quad_degree);
+                for (auto& qp : qps) /* Compute the weighted sum */
+                    int_val += qp.weight() * f( qp.point() );
+            }
+
+            std::cout << "Integral value: " << int_val;
+            std::cout << ", expected value: " << (1./((i+1)*(j+1))) << std::endl;
+        }
     }
 
-    std::cout << "Integral value: " << int_val << std::endl;
 
     return 0;
 }
