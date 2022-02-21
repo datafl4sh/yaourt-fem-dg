@@ -185,7 +185,7 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
 
                 if (has_neighbour)
                 {   /* NOT on a boundary */
-                    /* Add terms on skeleton (pay attention to fi_coeff) */
+                    Att += - fqp.weight() * 0.5 * fi_coeff * tphi * trans(tphi);
                 }
                 else
                 {   /* On a boundary*/
@@ -201,7 +201,7 @@ run_advection_reaction_solver(Mesh& msh, const dg_config<typename Mesh::coordina
                 auto ndphi  = nbasis.eval_grads(ep);
 
                 /* Advection-Reaction */
-                /* Add terms on skeleton (pay attention to fi_coeff) */
+                Atn += + fqp.weight() * fi_coeff * 0.5 * tphi * trans(nphi);
             }
 
             assm.assemble(msh, tcl, tcl, Att);
