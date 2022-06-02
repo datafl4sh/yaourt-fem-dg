@@ -39,7 +39,7 @@ compute_rhs(const yaourt::simplicial_mesh<T>& msh,
 
     auto bar = barycenter(msh, cl);
     auto meas = measure(msh, cl);
-    T bval = std::sin(100*M_PI*bar.x()) * std::sin(100*M_PI*bar.y());
+    T bval = std::sin(M_PI*bar.x()) * std::sin(M_PI*bar.y());
     bval = bval * 2.0 * M_PI * M_PI * meas / 3.0;
 
     local_rhs[0] = bval;
@@ -57,7 +57,7 @@ int main(int argc, char **argv)
     yaourt::simplicial_mesh<T> msh;
     auto mesher = yaourt::get_mesher(msh);
 
-    mesher.create_mesh(msh, 6);
+    mesher.create_mesh(msh, 2);
 
     auto assembler = yaourt::cfem::get_assembler(msh, 1);
 
@@ -82,6 +82,26 @@ int main(int argc, char **argv)
     blaze::DynamicVector<T> exp_sol;
 
     assembler.expand(sol, exp_sol);
+    
+    std::ofstream gnuplot_output("cfem_solution.txt");
+    
+    for (auto& cl : msh.cells)
+    {
+        auto l2g = cl.point_ids();
+
+        blaze::DynamicVector<T> loc_sol(3);
+        for (size_t i = 0; i < 3; i++)
+            loc_sol[i] = exp_sol[ l2g[i] ];
+
+        auto tps = yaourt::make_test_points(msh, cl, 7);
+        for (auto& tp : tps)
+        {
+            auto phi = yaourt::cfem::eval_basis(msh, cl, tp);
+            T sval = dot(loc_sol, phi);
+
+            gnuplot_output << tp.x() << " " << tp.y() << " " << sval << std::endl;
+        }
+    }
 
 #ifdef WITH_SILO
     yaourt::dataio::silo_database silo;

@@ -231,7 +231,7 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
         for (size_t i = 0; i < basis_size; i++)
             loc_sol[i] = sol[basis_size * ofs + i];
 
-        auto tps = yaourt::make_test_points(msh, cl, 6);
+        auto tps = yaourt::make_test_points(msh, cl, 7);
         for (auto& tp : tps)
         {
             auto phi = basis.eval(tp);
