@@ -159,7 +159,7 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
             assert(tbasis.size() == nbasis.size());
 
             auto n     = normal(msh, tcl, fc);
-            auto eta_l = eta;// / diameter(msh, fc);
+            auto eta_l = eta / diameter(msh, fc);
             auto f_qps = yaourt::quadratures::integrate(msh, fc, 2*degree);
 
             for (auto& fqp : f_qps)
@@ -170,27 +170,27 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
 
                 if (has_neighbour)
                 {   /* NOT on a boundary */
-                    Att += + fqp.weight() * eta_l * tphi * trans(tphi);     // [u][v]
-                    Att += - fqp.weight() * 0.5 * tphi * trans(tdphi*n);    // {grad(u).n}[v]
-                    Att += - fqp.weight() * 0.5 * (tdphi*n) * trans(tphi);  // [u]{grad(v).n}
+                    Att += // [u][v]
+                    Att += // {grad(u).n}[v]
+                    Att += // [u]{grad(v).n}
                 }
                 else
                 {   /* On a boundary*/
-                    Att += + fqp.weight() * eta_l * tphi * trans(tphi);     // [u][v]
-                    Att += - fqp.weight() * tphi * trans(tdphi*n);          // {grad(u).n}[v]
-                    Att += - fqp.weight() * (tdphi*n) * trans(tphi);        // [u]{grad(v).n}
+                    Att += // [u][v]
+                    Att += // {grad(u).n}[v]
+                    Att += // [u]{grad(v).n}
 
-                    loc_rhs -= fqp.weight() * data::dirichlet(ep) * (tdphi*n);
-                    loc_rhs += fqp.weight() * eta_l * data::dirichlet(ep) * tphi;
+                    loc_rhs -= /* dirichlet conditions */;
+                    loc_rhs += /* dirichlet conditions */;
                     continue;
                 }
 
                 auto nphi   = nbasis.eval(ep);
                 auto ndphi  = nbasis.eval_grads(ep);
 
-                Atn += - fqp.weight() * eta_l * tphi * trans(nphi);         // [u][v]
-                Atn += - fqp.weight() * 0.5 * tphi * trans(ndphi*n);        // {grad(u).n}[v]
-                Atn += + fqp.weight() * 0.5 * (tdphi*n) * trans(nphi);      // [u]{grad(v).n}
+                Atn += // [u][v]
+                Atn += // {grad(u).n}[v]
+                Atn += // [u]{grad(v).n}
             }
 
             assm.assemble(msh, tcl, tcl, Att);

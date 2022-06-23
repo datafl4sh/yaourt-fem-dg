@@ -146,10 +146,11 @@ int main(int argc, char **argv)
     {
         auto cl_num = offset(msh, cl);
 
-        /* (1) Recover element-local solution */
         blaze::DynamicVector<T> proj_loc(basis_size);
         for (size_t i = 0; i < basis_size; i++) 
-            proj_loc[i] = proj[cl_num*basis_size + i];
+        {
+            /* (1) Recover element-local solution */
+        }
 
         auto basis = yb::make_basis(msh, cl, degree);
         auto qps = yq::integrate(msh, cl, 2*degree+2);
@@ -157,11 +158,6 @@ int main(int argc, char **argv)
         {
             /* (2) Evaluate local solution and reference solution at quadrature
              * points, then compute L2-error */
-            auto phi = basis.eval(qp.point());
-            auto c_val = dot(proj_loc, phi);
-            auto r_val = f(qp.point());
-
-            L2_errsq += qp.weight() * (c_val-r_val) * (c_val-r_val);
         }
     }
 

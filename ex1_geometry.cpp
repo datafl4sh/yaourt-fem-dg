@@ -56,7 +56,6 @@ int main(void)
             std::cout << "    " << fc << std::endl;
             std::cout << "      Measure:    " << measure(msh, fc) << std::endl;
             std::cout << "      Barycenter: " << barycenter(msh, fc) << std::endl;
-            std::cout << "      Normal: " << trans(normal(msh, cl, fc)) << std::endl;
         }
     }
 

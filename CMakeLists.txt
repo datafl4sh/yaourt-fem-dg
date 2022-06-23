@@ -12,6 +12,7 @@ if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif()
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive")
 #set(CMAKE_CXX_FLAGS "-Wall -Wconversion -Wno-sign-conversion -Wno-unused-variable -Wno-shorten-64-to-32")
 
 #set(CMAKE_CXX_FLAGS_DEBUG "-g -fpermissive -fsanitize=address")
