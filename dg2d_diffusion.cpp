@@ -173,6 +173,13 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
                     Att += // [u][v]
                     Att += // {grad(u).n}[v]
                     Att += // [u]{grad(v).n}
+                    
+                    auto nphi   = nbasis.eval(ep);
+                    auto ndphi  = nbasis.eval_grads(ep);
+
+                    Atn += // [u][v]
+                    Atn += // {grad(u).n}[v]
+                    Atn += // [u]{grad(v).n}
                 }
                 else
                 {   /* On a boundary*/
@@ -182,15 +189,7 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
 
                     loc_rhs -= /* dirichlet conditions */;
                     loc_rhs += /* dirichlet conditions */;
-                    continue;
                 }
-
-                auto nphi   = nbasis.eval(ep);
-                auto ndphi  = nbasis.eval_grads(ep);
-
-                Atn += // [u][v]
-                Atn += // {grad(u).n}[v]
-                Atn += // [u]{grad(v).n}
             }
 
             assm.assemble(msh, tcl, tcl, Att);
