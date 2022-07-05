@@ -15,8 +15,8 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive")
 #set(CMAKE_CXX_FLAGS "-Wall -Wconversion -Wno-sign-conversion -Wno-unused-variable -Wno-shorten-64-to-32")
 
-#set(CMAKE_CXX_FLAGS_DEBUG "-g -fpermissive -fsanitize=address")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -fpermissive")
+set(CMAKE_CXX_FLAGS_DEBUG "-g -fpermissive -fsanitize=address")
+#set(CMAKE_CXX_FLAGS_DEBUG "-g -fpermissive")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -fpermissive -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASEASSERT "-O3 -g -fpermissive")
 
@@ -26,6 +26,8 @@ if (SILO_FOUND)
     include_directories("${SILO_INCLUDE_DIRS}")
     set(LINK_LIBS ${LINK_LIBS} ${SILO_LIBRARIES})
 endif()
+
+find_package(Gnuplot)
 
 find_package(LAPACK REQUIRED)
 if(LAPACK_FOUND)
@@ -67,3 +69,6 @@ target_link_libraries(ex3_projection ${LINK_LIBS})
 
 add_executable(fvol_conservation fvol_conservation.cpp)
 target_link_libraries(fvol_conservation ${LINK_LIBS})
+
+add_executable(hho_diffusion hho_diffusion.cpp)
+target_link_libraries(hho_diffusion ${LINK_LIBS})

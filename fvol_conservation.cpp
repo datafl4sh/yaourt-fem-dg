@@ -220,6 +220,7 @@ compute_energies(Mesh& msh,
 	return fe;
 }
 
+#ifdef WITH_SILO
 template<typename Mesh>
 static void
 export_solution(Mesh& msh, size_t ts,
@@ -243,6 +244,7 @@ export_solution(Mesh& msh, size_t ts,
 
     silo.close();
 }
+#endif
 
 template<typename Mesh>
 static void
@@ -295,7 +297,9 @@ run_acoustics_solver(Mesh& msh)
 
 		if (i%100 == 0)
 		{
+#ifdef WITH_SILO
 			export_solution(msh, i+1, next);
+#endif
 			nrg.push_back( compute_energies(msh, next) );
 			gp.plot(nrg);
 		}

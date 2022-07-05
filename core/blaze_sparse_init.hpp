@@ -177,7 +177,7 @@ const DynamicMatrix<T,SO>
 solve_LU(const DynamicMatrix<T,SO>& A, const DynamicMatrix<T,SO>& B)
 {
     DynamicMatrix<T,SO> At = A;
-    DynamicMatrix<T,SO> ret = B;
+    DynamicMatrix<T,SO> ret = trans(B);
 
     auto size = A.rows();
 
@@ -185,7 +185,7 @@ solve_LU(const DynamicMatrix<T,SO>& A, const DynamicMatrix<T,SO>& B)
     getrf( At, ipiv.get() );
     getrs( At, ret, 'N', ipiv.get() );
 
-    return ret;
+    return trans(ret);
 }
 
 template< typename T, bool SO >

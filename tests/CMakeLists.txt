@@ -6,3 +6,6 @@ target_link_libraries(refelem ${LINK_LIBS})
 
 #add_executable(maxwell_refelem maxwell_refelem.cpp)
 #target_link_libraries(maxwell_refelem ${LINK_LIBS})
+
+add_executable(hho_opers hho_opers.cpp)
+target_link_libraries(hho_opers ${LINK_LIBS})
