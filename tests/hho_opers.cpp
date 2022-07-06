@@ -42,7 +42,31 @@ test_hho_reconstruction_operator(const Mesh& msh, size_t degree)
 
 template<typename Mesh>
 typename Mesh::coordinate_type
-test_hho_stabilization(const Mesh& msh, size_t degree)
+test_stabilization_LS(const Mesh& msh, size_t degree)
+{
+    using T = typename Mesh::coordinate_type;
+    
+    auto f = [](const point<T,2>& pt) -> T {
+        return std::sin(M_PI*pt.x()) * std::sin(M_PI*pt.y());
+    };
+    
+    hho_degree_info hdi( mixed_order{degree} );
+    
+    T err = 0.0;
+    for (auto& cl : msh.cells)
+    {
+        auto hpf = project_hho(msh, cl, hdi, f);
+        auto Z = make_hho_stabilization(msh, cl, hdi);
+        
+        err += std::abs( dot(hpf, Z*hpf) );
+    }
+    
+    return std::sqrt(err);
+}
+
+template<typename Mesh>
+typename Mesh::coordinate_type
+test_stabilization_hho(const Mesh& msh, size_t degree)
 {
     using T = typename Mesh::coordinate_type;
     
@@ -95,13 +119,13 @@ operator<<(std::ostream& os, const convergence_status& cs)
 convergence_status
 rate_color(double actual, double expected)
 {
-    const double low = 0.9;
-    const double high = 1.1;
+    const double low = 0.2;
+    const double high = 0.2;
             
-    if ( actual < low*expected )
+    if ( actual < expected-low )
         return convergence_status::TOO_LOW;
             
-    if ( actual > high*expected )
+    if ( actual > expected+high )
         return convergence_status::TOO_HIGH;
             
     return convergence_status::OK;
@@ -121,6 +145,7 @@ int test(const Function& tf)
         mesh_type msh;
         auto mesher = yaourt::get_mesher(msh);
         mesher.create_mesh(msh, 2);
+        shatter_mesh(msh, 0.05);
         
         T err_prev = tf(msh, degree);
         
@@ -154,12 +179,28 @@ int test(const Function& tf)
 template<typename Mesh>
 int test()
 {
-    auto testfun = [](Mesh& msh, size_t degree) {
-        return test_hho_stabilization(msh, degree);
+    std::cout << "HHO Reconstruction" << std::endl;
+    auto testrec = [](Mesh& msh, size_t degree) {
+        return test_hho_reconstruction_operator(msh, degree);
+        return test_stabilization_hho(msh, degree);
     };
     
-    test<Mesh>(testfun);
+    test<Mesh>(testrec);
     
+    std::cout << "LS Stabilization" << std::endl;
+    auto teststabLS = [](Mesh& msh, size_t degree) {
+        return test_stabilization_LS(msh, degree);
+    };
+
+    test<Mesh>(teststabLS);
+
+    std::cout << "HHO Stabilization" << std::endl;
+    auto teststabhho = [](Mesh& msh, size_t degree) {
+        return test_stabilization_hho(msh, degree);
+    };
+
+    test<Mesh>(teststabhho);
+
     return 0;
 }
 
