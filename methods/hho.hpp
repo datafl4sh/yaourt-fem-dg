@@ -67,58 +67,7 @@ public:
     bool    mixed_order() const { return mixedord; }
 };
 
-template<typename Mesh, typename Element, typename Basis>
-blaze::DynamicMatrix<typename Mesh::coordinate_type>
-make_stiffness_matrix(const Mesh& msh,
-                      const Element& elem,
-                      const Basis& basis)
-{
-    using T = typename Mesh::coordinate_type;
-    
-    auto bd = basis.degree();
-    auto bs = basis.size();
-    
-    blaze::DynamicMatrix<T> K(bs, bs, 0.0);
-    
-    auto qps = yaourt::quadratures::integrate(msh, elem, 2*bd);
-    for (auto& qp : qps)
-    {
-        auto dphi = basis.eval_grads(qp.point());
-        K += qp.weight() * dphi * trans(dphi);
-    }
-    
-    return K;
-}
-
-template<typename Mesh, typename Element, typename Basis, typename Function>
-blaze::DynamicVector<typename Mesh::coordinate_type>
-project(const Mesh& msh,
-        const Element& elem,
-        const Basis& basis,
-        const Function& f)
-{
-    using T = typename Mesh::coordinate_type;
-    
-    auto bd = basis.degree();
-    auto bs = basis.size();
-    
-    blaze::DynamicMatrix<T> M(bs, bs, 0.0);
-    blaze::DynamicVector<T> rhs(bs, 0.0);
-    
-    auto qps = yaourt::quadratures::integrate(msh, elem, 2*bd+1);
-    for (auto& qp : qps)
-    {
-        auto phi = basis.eval(qp.point());
-        M += qp.weight() * phi * trans(phi);
-        rhs += qp.weight() * f(qp.point()) * phi;
-    }
-    
-    blaze::DynamicVector<T> proj = blaze::solve_LU(M, rhs);
-    
-    return proj;
-}
-
-template<typename Mesh, typename Function>
+template<bool reduction_operator, typename Mesh, typename Function>
 blaze::DynamicVector<typename Mesh::coordinate_type>
 project_hho(const Mesh& msh,
             const typename Mesh::cell_type& cl,
@@ -141,20 +90,43 @@ project_hho(const Mesh& msh,
     auto cb = yaourt::bases::make_basis(msh, cl, cd);
     subvector(hho_proj, 0, cbs) = project(msh, cl, cb, f);
     
-    for (size_t fc_i = 0; fc_i < nf; fc_i++)
+    if constexpr (reduction_operator)
     {
-        size_t ofs = cbs + fc_i*fbs;
-        const auto& fc = fcs[fc_i];
-        auto fb = yaourt::bases::make_basis(msh, fc, fd);
-        
-        subvector(hho_proj, ofs, fbs) = project(msh, fc, fb, f);
+        for (size_t fc_i = 0; fc_i < nf; fc_i++)
+        {
+            size_t ofs = cbs + fc_i*fbs;
+            const auto& fc = fcs[fc_i];
+            auto fb = yaourt::bases::make_basis(msh, fc, fd);
+            
+            subvector(hho_proj, ofs, fbs) = project(msh, fc, fb, f);
+        }
     }
     
     return hho_proj;
 }
 
+template<typename Mesh, typename Function>
+blaze::DynamicVector<typename Mesh::coordinate_type>
+hho_reduce(const Mesh& msh,
+            const typename Mesh::cell_type& cl,
+            const hho_degree_info& hdi,
+            const Function& f)
+{
+    return project_hho<true>(msh, cl, hdi, f);
+}
+
+template<typename Mesh, typename Function>
+blaze::DynamicVector<typename Mesh::coordinate_type>
+hho_rhs(const Mesh& msh,
+        const typename Mesh::cell_type& cl,
+        const hho_degree_info& hdi,
+        const Function& f)
+{
+    return project_hho<false>(msh, cl, hdi, f);
+}
+
 template<typename Mesh>
-blaze::DynamicMatrix<typename Mesh::coordinate_type>
+auto
 make_hho_gradient_reconstruction(const Mesh& msh,
                                  const typename Mesh::cell_type& cl,
                                  const hho_degree_info& hdi)
@@ -218,7 +190,10 @@ make_hho_gradient_reconstruction(const Mesh& msh,
         }
     }
     
-    return blaze::solve_LU(oper_lhs, oper_rhs);
+    blaze::DynamicMatrix<T> GR = blaze::solve_LU(oper_lhs, oper_rhs);
+    blaze::DynamicMatrix<T> A = trans(oper_rhs) * GR;
+
+    return std::make_pair(GR, A); 
 }
 
 template<typename Mesh>
@@ -274,87 +249,6 @@ make_hho_stabilization(const Mesh& msh,
         submatrix(oper_rhs, 0, 0, fbs, cbs) = blaze::solve_LU(mass, trace);
         
         oper += trans(oper_rhs) * mass * oper_rhs / ht;
-    }
-    
-    return oper;
-}
-
-template<typename Mesh>
-blaze::DynamicMatrix<typename Mesh::coordinate_type>
-make_hho_stabilization_xxx(const Mesh& msh,
-                       const typename Mesh::cell_type& cl,
-                       blaze::DynamicMatrix<typename Mesh::coordinate_type>& R,
-                       const hho_degree_info& hdi)
-{
-    using T = typename Mesh::coordinate_type;
-    
-    /* Degrees for each space */
-    auto cd = hdi.cell_degree();
-    auto fd = hdi.face_degree();
-    auto rd = hdi.reconstruction_degree();
-    
-    /* Basis sizes */
-    auto fbs = yaourt::bases::scalar_basis_size(fd, 1);
-    auto cbs = yaourt::bases::scalar_basis_size(cd, 2);
-    auto rbs = yaourt::bases::scalar_basis_size(rd, 2);
-    
-    /* Cell and reconstruction space bases */
-    auto cbasis = yaourt::bases::make_basis(msh, cl, cd);
-    auto rbasis = yaourt::bases::make_basis(msh, cl, rd);
-    
-    auto fcs = faces(msh, cl);
-    auto nf = fcs.size();
-    
-    blaze::DynamicMatrix<T> oper(cbs + nf*fbs, cbs + nf*fbs, 0.0);
-    auto ht = diameter(msh, cl);
-    
-    blaze::DynamicMatrix<T> CT(cbs, rbs, 0.0);
-    auto qps = yaourt::quadratures::integrate(msh, cl, cd+rd);
-    for (auto& qp : qps)
-    {
-        auto r_phi = rbasis.eval(qp.point());
-        auto c_phi = subvector(r_phi, 0, cbs);
-        CT += qp.weight() * c_phi * trans(r_phi);
-    }
-    
-    blaze::DynamicMatrix<T> evalRC = submatrix(CT, 0, 1, cbs, rbs-1);
-    blaze::DynamicMatrix<T> Cmass  = submatrix(CT, 0, 0, cbs, cbs);
-    
-    blaze::DynamicMatrix<T> evR = evalRC * R;
-    blaze::DynamicMatrix<T> projRT = - blaze::solve_LU(Cmass, evR);
-    submatrix(projRT, 0, 0, cbs, cbs) += blaze::IdentityMatrix<T>(cbs);
-    
-    for (size_t fc_i = 0; fc_i < nf; fc_i++)
-    {
-        size_t ofs = cbs + fc_i*fbs;
-        const auto& fc = fcs[fc_i];
-        
-        blaze::DynamicMatrix<T> oper_rhs(fbs, cbs + nf*fbs, 0.0);
-        blaze::DynamicMatrix<T> Fmass(fbs, fbs, 0.0);
-        blaze::DynamicMatrix<T> Ftrace(fbs, rbs, 0.0);
-        
-        auto fbasis = yaourt::bases::make_basis(msh, fc, fd);
-
-        auto fqps = yaourt::quadratures::integrate(msh, fc, rd+fd);
-        for (auto& fqp : fqps)
-        {
-            auto ep     = fqp.point();
-            auto f_phi  = fbasis.eval(ep);
-            auto r_phi  = rbasis.eval(ep);
-            
-            Fmass   += fqp.weight() * f_phi * trans(f_phi);
-            Ftrace  += fqp.weight() * f_phi * trans(r_phi);
-        }
-        
-        blaze::DynamicMatrix<T> F = submatrix(Ftrace, 0, 1, fbs, rbs-1)*R;
-        F += submatrix(Ftrace, 0, 0, fbs, cbs)*projRT;
-        
-        oper_rhs = blaze::solve_LU(Fmass, F);
-        
-        auto I = blaze::IdentityMatrix<T>(fbs);
-        submatrix(oper_rhs, 0, ofs, fbs, fbs) -= I;
-        
-        oper += trans(oper_rhs) * Fmass * oper_rhs / ht;
     }
     
     return oper;
@@ -438,4 +332,63 @@ make_hho_stabilization(const Mesh& msh,
     }
     
     return oper;
+}
+
+template<typename T>
+auto
+static_condensation(const hho_degree_info& hdi,
+                    const blaze::DynamicMatrix<T>& A,
+                    const blaze::DynamicVector<T>& b)
+{
+    using matr = blaze::DynamicMatrix<T>;
+    using vect = blaze::DynamicVector<T>;
+
+    assert(A.rows() == A.columns());
+    assert(A.columns() == b.size());
+
+    auto cd = hdi.cell_degree();
+    auto cbs = yaourt::bases::scalar_basis_size(cd, 2);
+    auto rs = A.rows() - cbs;
+
+    matr ATT = submatrix(A,   0,   0, cbs, cbs);
+    matr ATF = submatrix(A,   0, cbs, cbs,  rs);
+    auto AFT = submatrix(A, cbs,   0,  rs, cbs);
+    auto AFF = submatrix(A, cbs, cbs,  rs,  rs);
+
+    vect bT = subvector(b,   0, cbs);
+    auto bF = subvector(b, cbs,  rs);
+
+    matr AL = blaze::solve_LU(ATT, ATF);
+    vect bL = blaze::solve_LU(ATT, bT);
+
+    matr AC = AFF - AFT * AL;
+    vect bC = bF - AFT * bL;
+
+    return std::make_pair(AC, bC);
+}
+
+template<typename T>
+blaze::DynamicVector<T>
+static_decondensation_impl(const hho_degree_info& hdi,
+                           const blaze::DynamicMatrix<T>&  A,
+                           const blaze::DynamicVector<T>&  b,
+                           const blaze::DynamicVector<T>&  solF)
+{
+    using matr = blaze::DynamicMatrix<T>;
+    using vect = blaze::DynamicVector<T>;
+
+    auto cd = hdi.cell_degree();
+    auto cbs = yaourt::bases::scalar_basis_size(cd, 2);
+    auto rs = A.rows() - cbs;
+
+    matr ATT = submatrix(A,   0,   0, cbs, cbs);
+    matr ATF = submatrix(A,   0, cbs, cbs,  rs);
+    vect t = subvector(b, 0, cbs) - ATF*solF;
+    vect solT = blaze::solve_LU(ATT, t);
+
+    vect ret( b.size() );
+    subvector(ret, 0, cbs)  = solT;
+    subvector(ret, cbs, rs) = solF;
+
+    return ret;
 }

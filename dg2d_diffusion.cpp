@@ -211,6 +211,8 @@ run_diffusion_solver(Mesh& msh, const dg_config<typename Mesh::coordinate_type>&
     cgp.rr_tol = 1e-8;
     cgp.max_iter = 2*assm.system_size();
 
+    std::cout << "System size: " << assm.system_size() << ", iter limit: " << cgp.max_iter << std::endl;
+
     if (cfg.use_preconditioner)
         conjugated_gradient(cgp, assm.lhs, assm.rhs, sol, assm.pc);
     else    

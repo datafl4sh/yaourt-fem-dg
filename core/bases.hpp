@@ -26,6 +26,8 @@
 
 #include "core/mesh.hpp"
 #include "core/refelem.hpp"
+#include "core/quadratures.hpp"
+#include "core/blaze_sparse_init.hpp"
 
 namespace yaourt {
 namespace bases {
@@ -358,6 +360,62 @@ public:
         return basis_degree;
     }
 };
+
+
+
+template<typename Mesh, typename Element, typename Basis>
+blaze::DynamicMatrix<typename Mesh::coordinate_type>
+make_stiffness_matrix(const Mesh& msh,
+                      const Element& elem,
+                      const Basis& basis)
+{
+    using T = typename Mesh::coordinate_type;
+    
+    auto bd = basis.degree();
+    auto bs = basis.size();
+    
+    blaze::DynamicMatrix<T> K(bs, bs, 0.0);
+    
+    auto qps = yaourt::quadratures::integrate(msh, elem, 2*bd);
+    for (auto& qp : qps)
+    {
+        auto dphi = basis.eval_grads(qp.point());
+        K += qp.weight() * dphi * trans(dphi);
+    }
+    
+    return K;
+}
+
+template<typename Mesh, typename Element, typename Basis, typename Function>
+blaze::DynamicVector<typename Mesh::coordinate_type>
+project(const Mesh& msh,
+        const Element& elem,
+        const Basis& basis,
+        const Function& f)
+{
+    using T = typename Mesh::coordinate_type;
+    
+    auto bd = basis.degree();
+    auto bs = basis.size();
+    
+    blaze::DynamicMatrix<T> M(bs, bs, 0.0);
+    blaze::DynamicVector<T> rhs(bs, 0.0);
+    
+    auto qps = yaourt::quadratures::integrate(msh, elem, 2*bd+1);
+    for (auto& qp : qps)
+    {
+        auto phi = basis.eval(qp.point());
+        M += qp.weight() * phi * trans(phi);
+        rhs += qp.weight() * f(qp.point()) * phi;
+    }
+    
+    blaze::DynamicVector<T> proj = blaze::solve_LU(M, rhs);
+    
+    return proj;
+}
+
+
+
 
 template<typename RefElem>
 class refelement_scalar_basis;

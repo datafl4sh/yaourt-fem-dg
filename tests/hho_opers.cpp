@@ -14,7 +14,7 @@ test_hho_reconstruction_operator(const Mesh& msh, size_t degree)
     using T = typename Mesh::coordinate_type;
     
     auto f = [](const point<T,2>& pt) -> T {
-        return std::sin(M_PI*pt.x()) * std::sin(M_PI*pt.y());
+        return std::sin(3*M_PI*pt.x()) * std::sin(3*M_PI*pt.y());
     };
     
     hho_degree_info hdi( equal_order{degree} );
@@ -25,9 +25,9 @@ test_hho_reconstruction_operator(const Mesh& msh, size_t degree)
     T err = 0.0;
     for (auto& cl : msh.cells)
     {
-        auto hpf = project_hho(msh, cl, hdi, f);
-        auto gr = make_hho_gradient_reconstruction(msh, cl, hdi);
-        subvector(R, 1, rbs-1) = gr*hpf;
+        auto hpf = hho_reduce(msh, cl, hdi, f);
+        auto [GR, A] = make_hho_gradient_reconstruction(msh, cl, hdi);
+        subvector(R, 1, rbs-1) = GR*hpf;
         
         auto rb = yaourt::bases::make_basis(msh, cl, rd);
         auto pf = project(msh, cl, rb, f);
@@ -47,7 +47,7 @@ test_stabilization_LS(const Mesh& msh, size_t degree)
     using T = typename Mesh::coordinate_type;
     
     auto f = [](const point<T,2>& pt) -> T {
-        return std::sin(M_PI*pt.x()) * std::sin(M_PI*pt.y());
+        return std::sin(3*M_PI*pt.x()) * std::sin(3*M_PI*pt.y());
     };
     
     hho_degree_info hdi( mixed_order{degree} );
@@ -55,7 +55,7 @@ test_stabilization_LS(const Mesh& msh, size_t degree)
     T err = 0.0;
     for (auto& cl : msh.cells)
     {
-        auto hpf = project_hho(msh, cl, hdi, f);
+        auto hpf = hho_reduce(msh, cl, hdi, f);
         auto Z = make_hho_stabilization(msh, cl, hdi);
         
         err += std::abs( dot(hpf, Z*hpf) );
@@ -71,7 +71,7 @@ test_stabilization_hho(const Mesh& msh, size_t degree)
     using T = typename Mesh::coordinate_type;
     
     auto f = [](const point<T,2>& pt) -> T {
-        return std::sin(M_PI*pt.x()) * std::sin(M_PI*pt.y());
+        return std::sin(3*M_PI*pt.x()) * std::sin(3*M_PI*pt.y());
     };
     
     hho_degree_info hdi( equal_order{degree} );
@@ -79,9 +79,9 @@ test_stabilization_hho(const Mesh& msh, size_t degree)
     T err = 0.0;
     for (auto& cl : msh.cells)
     {
-        auto hpf = project_hho(msh, cl, hdi, f);
-        auto gr = make_hho_gradient_reconstruction(msh, cl, hdi);
-        auto Z = make_hho_stabilization(msh, cl, gr, hdi);
+        auto hpf = hho_reduce(msh, cl, hdi, f);
+        auto [GR, A] = make_hho_gradient_reconstruction(msh, cl, hdi);
+        auto Z = make_hho_stabilization(msh, cl, GR, hdi);
         
         err += std::abs( dot(hpf, Z*hpf) );
     }
@@ -137,7 +137,7 @@ int test(const Function& tf)
     using mesh_type = Mesh;
     using T = typename mesh_type::coordinate_type;
 
-    for (size_t degree = 0; degree < 4; degree++)
+    for (size_t degree = 0; degree < 9; degree++)
     {
         std::cout << "Testing order " << degree << ", expected rate is ";
         std::cout << degree+1 << std::endl;
@@ -145,7 +145,6 @@ int test(const Function& tf)
         mesh_type msh;
         auto mesher = yaourt::get_mesher(msh);
         mesher.create_mesh(msh, 2);
-        shatter_mesh(msh, 0.05);
         
         T err_prev = tf(msh, degree);
         
